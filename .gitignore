@@ -20,6 +20,10 @@
 # production
 /build
 
+# data (local store; use data.example as reference)
+/data
+/data.backup
+
 # misc
 .DS_Store
 *.pem
