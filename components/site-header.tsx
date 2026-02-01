@@ -16,9 +16,11 @@ export async function SiteHeader() {
         </Link>
 
         <nav className="flex items-center gap-3">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/ask">Ask Question</Link>
-          </Button>
+          {user && (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/ask">Ask Question</Link>
+            </Button>
+          )}
           {user?.role === "admin" && (
             <Button asChild variant="outline" size="sm">
               <Link href="/admin/users">Users</Link>
@@ -27,9 +29,15 @@ export async function SiteHeader() {
 
           {user ? (
             <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">
+              <Link
+                href={`/users/${user.username}`}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
                 {user.username}
-              </span>
+                {user.reputation != null && (
+                  <span className="ml-1">({user.reputation})</span>
+                )}
+              </Link>
               <form action={logout}>
                 <Button variant="ghost" size="sm" type="submit">
                   Logout

@@ -1,8 +1,12 @@
+import Link from "next/link";
+import { Fragment } from "react";
 import type { Comment, User } from "@/lib/types";
 import { AddCommentForm } from "@/components/forms/add-comment-form";
 import { CompactByline } from "@/components/byline";
 import { BodyContent } from "@/components/body-content";
 import { CommentItem } from "@/components/comment-item";
+import { displayAuthorName } from "@/lib/utils";
+import { Item, ItemContent, ItemFooter, ItemGroup, ItemSeparator } from "@/components/ui/item";
 
 interface CommentListProps {
   comments: (Comment & { author: User | undefined })[];
@@ -11,6 +15,7 @@ interface CommentListProps {
   questionId: string;
   currentUserId?: string;
   isAdmin?: boolean;
+  canComment?: boolean;
 }
 
 export function CommentList({
@@ -20,44 +25,68 @@ export function CommentList({
   questionId,
   currentUserId,
   isAdmin,
+  canComment = true,
 }: CommentListProps) {
   const showActions = currentUserId !== undefined || isAdmin === true;
 
   return (
-    <div className="border-t border-border pt-3 mt-3">
+    <div className="border-t border-border pt-4 mt-4 space-y-3">
       {comments.length > 0 && (
-        <div className="space-y-2 mb-3">
-          {comments.map((comment) =>
-            showActions ? (
-              <CommentItem
-                key={comment.id}
-                comment={comment}
-                questionId={questionId}
-                currentUserId={currentUserId}
-                isAdmin={isAdmin}
-              />
-            ) : (
-              <div
-                key={comment.id}
-                className="text-sm text-muted-foreground border-b border-border/50 pb-2"
-              >
-                <BodyContent body={comment.body} className="inline text-sm" />
-                <span className="mx-1">–</span>
-                <CompactByline
-                  username={comment.author?.username ?? "Unknown"}
-                  timeAgo={getTimeAgo(new Date(comment.createdAt))}
-                  agentLabel={comment.agentLabel}
+        <ItemGroup className="mb-3" data-size="sm">
+          {comments.map((comment, index) => (
+            <Fragment key={comment.id}>
+              {index > 0 && <ItemSeparator />}
+              {showActions ? (
+                <CommentItem
+                  comment={comment}
+                  questionId={questionId}
+                  currentUserId={currentUserId}
+                  isAdmin={isAdmin}
                 />
-              </div>
-            )
-          )}
-        </div>
+              ) : (
+                <Item
+                  size="sm"
+                  variant="muted"
+                  className="text-sm border rounded-md py-2 px-3"
+                >
+                  <ItemContent className="flex-1 min-w-0 gap-0">
+                    <BodyContent body={comment.body} className="inline text-sm text-foreground [&_p]:inline [&_p]:text-foreground" />
+                  </ItemContent>
+                  <ItemFooter className="flex-shrink-0 text-xs text-muted-foreground p-0">
+                    <span className="mr-1">–</span>
+                    <CompactByline
+                      username={displayAuthorName(comment.author)}
+                      timeAgo={getTimeAgo(new Date(comment.createdAt))}
+                      agentLabel={comment.agentLabel}
+                      usernameForProfile={comment.author?.username}
+                    />
+                  </ItemFooter>
+                </Item>
+              )}
+            </Fragment>
+          ))}
+        </ItemGroup>
       )}
-      <AddCommentForm
-        parentType={parentType}
-        parentId={parentId}
-        questionId={questionId}
-      />
+      {currentUserId ? (
+        canComment ? (
+          <AddCommentForm
+            parentType={parentType}
+            parentId={parentId}
+            questionId={questionId}
+          />
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            You need 50 reputation to comment.
+          </p>
+        )
+      ) : (
+        <Link
+          href={`/login?redirect=/questions/${questionId}`}
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          Sign in to add a comment
+        </Link>
+      )}
     </div>
   );
 }

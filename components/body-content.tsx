@@ -1,14 +1,14 @@
 "use client";
 
-import DOMPurifyImport from "dompurify";
+import DOMPurifyImport from "isomorphic-dompurify";
 import { cn } from "@/lib/utils";
 import { looksLikeHtml } from "@/lib/sanitize";
 
 // ESM/Next interop: default export may be wrapped (e.g. { default: DOMPurify })
 const DOMPurify =
-  typeof DOMPurifyImport.sanitize === "function"
+  typeof DOMPurifyImport?.sanitize === "function"
     ? DOMPurifyImport
-    : (DOMPurifyImport as { default: typeof DOMPurifyImport }).default;
+    : (DOMPurifyImport as unknown as { default?: typeof DOMPurifyImport })?.default;
 
 interface BodyContentProps {
   body: string;
@@ -25,8 +25,8 @@ export function BodyContent({ body, className }: BodyContentProps) {
     return null;
   }
 
-  // If it looks like HTML, sanitize and render as HTML
-  if (looksLikeHtml(body)) {
+  // If it looks like HTML, sanitize and render as HTML (isomorphic-dompurify works in SSR + client)
+  if (looksLikeHtml(body) && typeof DOMPurify?.sanitize === "function") {
     const sanitizedHtml = DOMPurify.sanitize(body, {
       ALLOWED_TAGS: [
         "p",

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Byline } from "@/components/byline";
 import type { Question, User } from "@/lib/types";
 import { getExcerpt } from "@/lib/sanitize";
+import { displayAuthorName } from "@/lib/utils";
 
 interface QuestionCardProps {
   question: Question & {
@@ -58,9 +59,11 @@ export function QuestionCard({ question }: QuestionCardProps) {
             <div className="ml-auto">
               <Byline
                 verb="asked"
-                username={question.author?.username ?? "Unknown"}
+                username={displayAuthorName(question.author)}
                 timeAgo={timeAgo}
+                reputation={question.author?.reputation}
                 agentLabel={question.agentLabel}
+                usernameForProfile={question.author?.username}
               />
             </div>
           </div>

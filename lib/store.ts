@@ -37,6 +37,10 @@ export function readStore(): Store {
       (user as User).role = "admin";
       needsWrite = true;
     }
+    if (!("reputation" in user) || typeof (user as User).reputation !== "number") {
+      (user as User).reputation = 1;
+      needsWrite = true;
+    }
   }
   if (needsWrite) {
     writeStore(store);
@@ -69,6 +73,8 @@ export function getUsersForAdmin(): UserListItem[] {
     username: u.username,
     createdAt: u.createdAt,
     role: u.role,
+    ...(u.reputation != null && { reputation: u.reputation }),
+    ...(u.deletedAt != null && { deletedAt: u.deletedAt }),
   }));
 }
 
@@ -141,6 +147,18 @@ export function getQuestionById(id: string): {
   };
 }
 
+// Reputation: mutate in memory; caller must writeStore. Floor is 1.
+export function applyReputationDelta(
+  store: Store,
+  userId: string,
+  delta: number
+): void {
+  const user = store.users.find((u) => u.id === userId);
+  if (!user) return;
+  const current = user.reputation ?? 1;
+  user.reputation = Math.max(1, current + delta);
+}
+
 // Vote helpers
 export function getUserVote(
   userId: string,
@@ -155,4 +173,105 @@ export function getUserVote(
       v.entityId === entityId
   );
   return vote?.direction ?? null;
+}
+
+// Profile: safe user + activity for display
+export interface UserProfileData {
+  profile: {
+    id: string;
+    username: string;
+    createdAt: string;
+    role: "admin" | "default";
+    reputation?: number;
+  };
+  questions: { id: string; title: string; createdAt: string; voteCount: number }[];
+  answers: {
+    id: string;
+    questionId: string;
+    createdAt: string;
+    questionTitle: string;
+  }[];
+  comments: {
+    id: string;
+    parentType: "question" | "answer";
+    parentId: string;
+    createdAt: string;
+    questionId: string;
+    questionTitle: string;
+  }[];
+}
+
+export function getUserProfileByUsername(username: string): UserProfileData | null {
+  const store = readStore();
+  const user = store.users.find(
+    (u) => u.username.toLowerCase() === username.toLowerCase()
+  );
+  if (!user) return null;
+
+  const questions = store.questions
+    .filter((q) => q.authorId === user.id)
+    .map((q) => ({
+      id: q.id,
+      title: q.title,
+      createdAt: q.createdAt,
+      voteCount: q.voteCount,
+    }))
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+  const answers = store.answers
+    .filter((a) => a.authorId === user.id)
+    .map((a) => {
+      const q = store.questions.find((q) => q.id === a.questionId);
+      return {
+        id: a.id,
+        questionId: a.questionId,
+        createdAt: a.createdAt,
+        questionTitle: q?.title ?? "Unknown question",
+      };
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+  const comments = store.comments
+    .filter((c) => c.authorId === user.id)
+    .map((c) => {
+      const questionId =
+        c.parentType === "question"
+          ? c.parentId
+          : (() => {
+              const ans = store.answers.find((a) => a.id === c.parentId);
+              return ans?.questionId ?? "";
+            })();
+      const q = store.questions.find((q) => q.id === questionId);
+      return {
+        id: c.id,
+        parentType: c.parentType,
+        parentId: c.parentId,
+        createdAt: c.createdAt,
+        questionId,
+        questionTitle: q?.title ?? "Unknown question",
+      };
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+  return {
+    profile: {
+      id: user.id,
+      username: user.username,
+      createdAt: user.createdAt,
+      role: user.role,
+      ...(user.reputation != null && { reputation: user.reputation }),
+    },
+    questions,
+    answers,
+    comments,
+  };
 }

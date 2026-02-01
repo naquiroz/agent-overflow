@@ -8,8 +8,10 @@ import { AddAnswerForm } from "@/components/forms/add-answer-form";
 import { Byline } from "@/components/byline";
 import { getSession } from "@/lib/session";
 import { getUserVote } from "@/lib/store";
+import { hasPrivilege } from "@/lib/privileges";
 import { BodyContent } from "@/components/body-content";
 import { QuestionActions } from "@/components/question-actions";
+import { displayAuthorName } from "@/lib/utils";
 
 interface QuestionDetailProps {
   question: Question & { author: User | undefined };
@@ -30,6 +32,11 @@ export async function QuestionDetail({
     ? getUserVote(session.id, "question", question.id)
     : null;
 
+  const isAdmin = session?.role === "admin";
+  const canUpvote = isAdmin || (!!session && hasPrivilege(session.reputation ?? 0, "vote_up"));
+  const canDownvote = isAdmin || (!!session && hasPrivilege(session.reputation ?? 0, "vote_down"));
+  const canComment = isAdmin || (!!session && hasPrivilege(session.reputation ?? 0, "comment"));
+
   const timeAgo = getTimeAgo(new Date(question.createdAt));
 
   return (
@@ -47,15 +54,16 @@ export async function QuestionDetail({
         <div className="flex items-center gap-4 flex-wrap">
           <Byline
             verb="asked"
-            username={question.author?.username ?? "Unknown"}
+            username={displayAuthorName(question.author)}
             timeAgo={timeAgo}
             agentLabel={question.agentLabel}
+            usernameForProfile={question.author?.username}
           />
           <QuestionActions
             question={question}
             questionId={question.id}
             currentUserId={session?.id}
-            isAdmin={session?.role === "admin"}
+            isAdmin={isAdmin}
           />
         </div>
       </div>
@@ -68,6 +76,9 @@ export async function QuestionDetail({
           questionId={question.id}
           voteCount={question.voteCount}
           userVote={questionVote}
+          isSignedIn={!!session}
+          canUpvote={canUpvote}
+          canDownvote={canDownvote}
         />
         <div className="flex-1 min-w-0">
           <BodyContent body={question.body} className="mb-4" />
@@ -84,7 +95,8 @@ export async function QuestionDetail({
             parentId={question.id}
             questionId={question.id}
             currentUserId={session?.id}
-            isAdmin={session?.role === "admin"}
+            isAdmin={isAdmin}
+            canComment={canComment}
           />
         </div>
       </div>
@@ -111,7 +123,13 @@ export async function QuestionDetail({
               questionId={question.id}
               userVote={answerVote}
               currentUserId={session?.id}
-              isAdmin={session?.role === "admin"}
+              isAdmin={isAdmin}
+              canUpvote={canUpvote}
+              canDownvote={canDownvote}
+              canComment={canComment}
+              acceptedAnswerId={question.acceptedAnswerId}
+              previousAcceptedAnswerIds={"previousAcceptedAnswerIds" in question ? (question.previousAcceptedAnswerIds ?? []) : []}
+              questionAuthorId={question.authorId}
             />
           );
         })}
@@ -119,7 +137,18 @@ export async function QuestionDetail({
 
       {/* Add answer form */}
       <div className="mt-8">
-        <AddAnswerForm questionId={question.id} />
+        {session ? (
+          <AddAnswerForm questionId={question.id} />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            <Link
+              href={`/login?redirect=/questions/${question.id}`}
+              className="text-foreground hover:underline"
+            >
+              Sign in to add an answer
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

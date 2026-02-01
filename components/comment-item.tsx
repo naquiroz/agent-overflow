@@ -8,6 +8,7 @@ import { BodyContent } from "@/components/body-content";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { updateComment, deleteComment } from "@/lib/actions";
+import { displayAuthorName } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -17,6 +18,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Item,
+  ItemContent,
+  ItemActions,
+  ItemFooter,
+} from "@/components/ui/item";
 
 function getTimeAgo(date: Date): string {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -105,9 +112,9 @@ export function CommentItem({
   };
 
   return (
-    <div className="text-sm text-muted-foreground border-b border-border/50 pb-2">
+    <Item size="sm" variant="muted" className="text-sm border rounded-md py-2 px-3">
       {isEditing ? (
-        <form onSubmit={handleEditSubmit} className="space-y-2">
+        <form onSubmit={handleEditSubmit} className="min-w-0 flex-1 space-y-2">
           {error && (
             <div className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded">
               {error}
@@ -119,7 +126,7 @@ export function CommentItem({
             required
             minLength={5}
             rows={2}
-            className="min-h-[60px] text-sm"
+            className="min-h-[60px] text-sm w-full"
           />
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={isPending}>
@@ -141,74 +148,81 @@ export function CommentItem({
         </form>
       ) : (
         <>
-          <BodyContent body={comment.body} className="inline text-sm" />
-          <span className="mx-1">–</span>
-          <CompactByline
-            username={comment.author?.username ?? "Unknown"}
-            timeAgo={timeAgo}
-            agentLabel={comment.agentLabel}
-          />
-          {comment.updatedAt && (
-            <span className="ml-1 text-muted-foreground/80">(edited)</span>
-          )}
-          {(canEdit || canDelete) && (
-            <span className="ml-2">
-              {canEdit && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setIsEditing(true)}
-                >
-                  Edit
-                </Button>
+          <ItemContent className="flex-1 min-w-0 gap-0 basis-full order-first">
+            <BodyContent body={comment.body} className="inline text-sm text-foreground [&_p]:inline [&_p]:text-foreground" />
+          </ItemContent>
+          <div className="flex basis-full flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
+            <ItemFooter className="flex-shrink-0 text-muted-foreground border-0 p-0 justify-start">
+              <span className="mr-1">–</span>
+              <CompactByline
+                username={displayAuthorName(comment.author)}
+                timeAgo={timeAgo}
+                agentLabel={comment.agentLabel}
+                usernameForProfile={comment.author?.username}
+              />
+              {comment.updatedAt && (
+                <span className="ml-1 text-muted-foreground/80">(edited)</span>
               )}
-              {canDelete && (
-                <>
-                  {canEdit && <span className="mx-1">·</span>}
-                  <AlertDialog
-                    open={deleteDialogOpen}
-                    onOpenChange={setDeleteDialogOpen}
+            </ItemFooter>
+            {(canEdit || canDelete) && (
+              <ItemActions className="gap-0.5 p-0 shrink-0">
+                {canEdit && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="h-auto py-0.5 px-1 text-[0.6875rem] text-muted-foreground/70 hover:bg-transparent hover:text-muted-foreground"
+                    onClick={() => setIsEditing(true)}
                   >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-auto p-0 text-xs text-destructive hover:text-destructive"
-                      onClick={() => setDeleteDialogOpen(true)}
+                    Edit
+                  </Button>
+                )}
+                {canDelete && (
+                  <>
+                    {canEdit && <span className="text-muted-foreground/50 text-[0.6875rem]">·</span>}
+                    <AlertDialog
+                      open={deleteDialogOpen}
+                      onOpenChange={setDeleteDialogOpen}
                     >
-                      Delete
-                    </Button>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete comment?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will permanently remove this comment. This action
-                          cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>
-                          Cancel
-                        </AlertDialogCancel>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={handleDeleteConfirm}
-                          disabled={isDeleting}
-                        >
-                          {isDeleting ? "Deleting..." : "Delete"}
-                        </Button>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </>
-              )}
-            </span>
-          )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className="h-auto py-0.5 px-1 text-[0.6875rem] text-destructive/70 hover:bg-transparent hover:text-destructive/90"
+                        onClick={() => setDeleteDialogOpen(true)}
+                      >
+                        Delete
+                      </Button>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete comment?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently remove this comment. This action
+                            cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={isDeleting}>
+                            Cancel
+                          </AlertDialogCancel>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleDeleteConfirm}
+                            disabled={isDeleting}
+                          >
+                            {isDeleting ? "Deleting..." : "Delete"}
+                          </Button>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                )}
+              </ItemActions>
+            )}
+          </div>
         </>
       )}
-    </div>
+    </Item>
   );
 }

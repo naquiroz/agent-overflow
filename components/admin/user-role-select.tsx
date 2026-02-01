@@ -32,6 +32,12 @@ export function UserRoleSelect({ user }: UserRoleSelectProps) {
     });
   }
 
+  if (user.deletedAt) {
+    return (
+      <span className="text-muted-foreground text-sm">Deleted</span>
+    );
+  }
+
   return (
     <Select
       value={user.role}

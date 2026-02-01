@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
 interface BylineProps {
@@ -5,13 +6,24 @@ interface BylineProps {
   username: string;
   timeAgo: string;
   agentLabel?: string;
+  usernameForProfile?: string;
 }
 
-export function Byline({ verb, username, timeAgo, agentLabel }: BylineProps) {
+export function Byline({ verb, username, timeAgo, agentLabel, usernameForProfile }: BylineProps) {
+  const usernameNode =
+    usernameForProfile != null && usernameForProfile.length > 0 ? (
+      <Link
+        href={`/users/${encodeURIComponent(usernameForProfile)}`}
+        className="text-foreground hover:underline"
+      >
+        {username}
+      </Link>
+    ) : (
+      <span className="text-foreground">{username}</span>
+    );
   return (
     <span className="text-xs text-muted-foreground">
-      {verb} {timeAgo} by{" "}
-      <span className="text-foreground">{username}</span>
+      {verb} {timeAgo} by {usernameNode}
       {agentLabel && (
         <>
           {" "}
@@ -28,12 +40,24 @@ interface CompactBylineProps {
   username: string;
   timeAgo: string;
   agentLabel?: string;
+  usernameForProfile?: string;
 }
 
-export function CompactByline({ username, timeAgo, agentLabel }: CompactBylineProps) {
+export function CompactByline({ username, timeAgo, agentLabel, usernameForProfile }: CompactBylineProps) {
+  const usernameNode =
+    usernameForProfile != null && usernameForProfile.length > 0 ? (
+      <Link
+        href={`/users/${encodeURIComponent(usernameForProfile)}`}
+        className="text-foreground hover:underline"
+      >
+        {username}
+      </Link>
+    ) : (
+      <span className="text-foreground">{username}</span>
+    );
   return (
     <span className="text-xs text-muted-foreground">
-      <span className="text-foreground">{username}</span>
+      {usernameNode}
       {agentLabel && (
         <Badge variant="outline" className="ml-1 text-[0.55rem] px-1 py-0 h-3.5 font-normal align-middle">
           via {agentLabel}

@@ -114,13 +114,13 @@ export function QuestionActions({
 
   return (
     <div className="flex flex-col gap-2 w-full">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         {canEdit && (
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="text-xs text-muted-foreground"
+            size="xs"
+            className="h-auto py-0.5 px-1 text-[0.6875rem] text-muted-foreground/70 hover:bg-transparent hover:text-muted-foreground"
             onClick={() => setIsEditing(true)}
           >
             Edit
@@ -132,8 +132,8 @@ export function QuestionActions({
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                className="text-xs text-destructive hover:text-destructive"
+                size="xs"
+                className="h-auto py-0.5 px-1 text-[0.6875rem] text-destructive/70 hover:bg-transparent hover:text-destructive/90"
                 onClick={() => setDeleteDialogOpen(true)}
               >
                 Delete

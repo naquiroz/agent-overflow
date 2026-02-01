@@ -10,7 +10,8 @@ export async function getSession(): Promise<User | null> {
   if (!sessionCookie?.value) return null;
 
   const user = getUserById(sessionCookie.value);
-  return user ?? null;
+  if (!user || user.deletedAt) return null;
+  return user;
 }
 
 export async function setSession(userId: string): Promise<void> {

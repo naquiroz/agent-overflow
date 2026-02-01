@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateAnswer, deleteAnswer } from "@/lib/actions";
+import { updateAnswer, deleteAnswer, setChosenAnswer } from "@/lib/actions";
+import { displayAuthorName } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -26,6 +27,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import {
+  Item,
+  ItemContent,
+  ItemHeader,
+  ItemFooter,
+  ItemActions,
+} from "@/components/ui/item";
+import { CheckCircle2, Check } from "lucide-react";
 
 const AGENT_OPTIONS = [
   { value: "Human in the loop", label: "Human in the loop" },
@@ -43,6 +53,12 @@ interface AnswerCardProps {
   userVote: 1 | -1 | null;
   currentUserId?: string;
   isAdmin?: boolean;
+  canUpvote?: boolean;
+  canDownvote?: boolean;
+  canComment?: boolean;
+  acceptedAnswerId?: string;
+  previousAcceptedAnswerIds?: string[];
+  questionAuthorId: string;
 }
 
 function stripHtmlToText(html: string): string {
@@ -56,12 +72,20 @@ export function AnswerCard({
   userVote,
   currentUserId,
   isAdmin,
+  canUpvote = true,
+  canDownvote = true,
+  canComment = true,
+  acceptedAnswerId,
+  previousAcceptedAnswerIds = [],
+  questionAuthorId,
 }: AnswerCardProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [acceptWarningOpen, setAcceptWarningOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAccepting, setIsAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [agentLabel, setAgentLabel] = useState(
     answer.agentLabel ?? "Human in the loop"
@@ -69,7 +93,34 @@ export function AnswerCard({
   const timeAgo = getTimeAgo(new Date(answer.createdAt));
   const canEdit =
     (currentUserId && answer.authorId === currentUserId) || isAdmin;
+  const isChosenAnswer = answer.id === acceptedAnswerId;
+  const isPreviouslyChosen = previousAcceptedAnswerIds.includes(answer.id);
+  const canChooseAnswer =
+    !!currentUserId &&
+    (questionAuthorId === currentUserId || !!isAdmin);
   const editBodyDisplay = stripHtmlToText(answer.body) || answer.body;
+
+  const runSetChosenAnswer = () => {
+    setError(null);
+    setIsAccepting(true);
+    setChosenAnswer(questionId, answer.id).then((result) => {
+      setIsAccepting(false);
+      setAcceptWarningOpen(false);
+      if (result?.error) {
+        setError(result.error);
+      } else {
+        router.refresh();
+      }
+    });
+  };
+
+  const handleAcceptClick = () => {
+    if (acceptedAnswerId && acceptedAnswerId !== answer.id) {
+      setAcceptWarningOpen(true);
+    } else {
+      runSetChosenAnswer();
+    }
+  };
 
   const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -111,7 +162,7 @@ export function AnswerCard({
   };
 
   return (
-    <div className="border-b border-border py-4">
+    <div className="border-b border-border py-6 last:border-b-0">
       <div className="flex gap-4">
         <VoteButtons
           entityType="answer"
@@ -119,129 +170,211 @@ export function AnswerCard({
           questionId={questionId}
           voteCount={answer.voteCount}
           userVote={userVote}
+          isSignedIn={!!currentUserId}
+          canUpvote={canUpvote}
+          canDownvote={canDownvote}
         />
-        <div className="flex-1 min-w-0">
-          {isEditing ? (
-            <form onSubmit={handleEditSubmit} className="space-y-3">
-              {error && (
-                <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
-                  {error}
-                </div>
-              )}
-              <Textarea
-                name="body"
-                defaultValue={editBodyDisplay}
-                required
-                minLength={10}
-                rows={6}
-                className="min-h-[120px]"
-              />
-              <div className="flex items-center gap-2">
-                <Select
-                  value={agentLabel}
-                  onValueChange={setAgentLabel}
-                >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Edit as" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AGENT_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Saving..." : "Save"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setIsEditing(false);
-                    setError(null);
-                  }}
-                  disabled={isPending}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          ) : (
-            <>
-              <BodyContent body={answer.body} />
-              <div className="mt-4 flex items-center gap-2">
-                <Byline
-                  verb="answered"
-                  username={answer.author?.username ?? "Unknown"}
-                  timeAgo={timeAgo}
-                  agentLabel={answer.agentLabel}
+        <div className="flex-1 min-w-0 flex flex-col gap-0">
+          <Item
+            variant="outline"
+            size="default"
+            className="rounded-lg border-border bg-card shadow-sm px-4 py-4 flex-wrap"
+          >
+            {isEditing ? (
+              <form onSubmit={handleEditSubmit} className="basis-full space-y-3">
+                {error && (
+                  <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+                    {error}
+                  </div>
+                )}
+                <Textarea
+                  name="body"
+                  defaultValue={editBodyDisplay}
+                  required
+                  minLength={10}
+                  rows={6}
+                  className="min-h-[120px] w-full"
                 />
-                {canEdit && (
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={agentLabel}
+                    onValueChange={setAgentLabel}
+                  >
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Edit as" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AGENT_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button type="submit" disabled={isPending}>
+                    {isPending ? "Saving..." : "Save"}
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
-                    className="text-xs text-muted-foreground"
-                    onClick={() => setIsEditing(true)}
+                    onClick={() => {
+                      setIsEditing(false);
+                      setError(null);
+                    }}
+                    disabled={isPending}
                   >
-                    Edit
+                    Cancel
                   </Button>
-                )}
-                {isAdmin && (
-                  <>
-                    <AlertDialog
-                      open={deleteDialogOpen}
-                      onOpenChange={setDeleteDialogOpen}
+                </div>
+              </form>
+            ) : (
+              <>
+                <ItemHeader className="flex-wrap gap-2">
+                  {isChosenAnswer && (
+                    <Badge
+                      variant="secondary"
+                      className="gap-1.5 bg-primary/10 text-primary border-primary/20"
                     >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Accepted answer
+                    </Badge>
+                  )}
+                  {isPreviouslyChosen && (
+                    <span className="text-xs text-muted-foreground">
+                      Previously accepted solution
+                    </span>
+                  )}
+                  {canChooseAnswer && !isChosenAnswer && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        className="gap-1.5 shrink-0"
+                        onClick={handleAcceptClick}
+                        disabled={isAccepting}
+                      >
+                        <Check className="h-4 w-4" />
+                        {isAccepting ? "Saving..." : "Accept as chosen answer"}
+                      </Button>
+                      <AlertDialog
+                        open={acceptWarningOpen}
+                        onOpenChange={setAcceptWarningOpen}
+                      >
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Change accepted answer?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Changing the accepted answer is not recommended. Are
+                              you sure you want to do this?
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isAccepting}>
+                              Cancel
+                            </AlertDialogCancel>
+                            <Button
+                              onClick={runSetChosenAnswer}
+                              disabled={isAccepting}
+                            >
+                              {isAccepting ? "Saving..." : "Confirm"}
+                            </Button>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </>
+                  )}
+                </ItemHeader>
+                <ItemContent className="basis-full flex-none gap-0">
+                  <div className="text-foreground [&_p]:text-[15px] [&_p]:leading-relaxed w-full">
+                    <BodyContent body={answer.body} />
+                  </div>
+                </ItemContent>
+                <ItemFooter className="basis-full border-t border-border bg-muted/30 -mx-4 -mb-4 px-4 py-3 rounded-b-lg justify-between gap-2 flex-wrap">
+                  <Byline
+                    verb="answered"
+                    username={displayAuthorName(answer.author)}
+                    timeAgo={timeAgo}
+                    agentLabel={answer.agentLabel}
+                    usernameForProfile={answer.author?.username}
+                  />
+                  <ItemActions className="gap-1 shrink-0">
+                    {canEdit && (
                       <Button
                         type="button"
                         variant="ghost"
-                        size="sm"
-                        className="text-xs text-destructive hover:text-destructive"
-                        onClick={() => setDeleteDialogOpen(true)}
+                        size="xs"
+                        className="h-auto py-0.5 px-1 text-[0.6875rem] text-muted-foreground/70 hover:bg-transparent hover:text-muted-foreground"
+                        onClick={() => setIsEditing(true)}
                       >
-                        Delete
+                        Edit
                       </Button>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete answer?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will permanently remove this answer and its
-                            comments. This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel disabled={isDeleting}>
-                            Cancel
-                          </AlertDialogCancel>
-                          <Button
-                            variant="destructive"
-                            onClick={handleDeleteConfirm}
-                            disabled={isDeleting}
-                          >
-                            {isDeleting ? "Deleting..." : "Delete"}
-                          </Button>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                    {error && (
-                      <span className="text-xs text-destructive">{error}</span>
                     )}
-                  </>
+                    {isAdmin && (
+                      <>
+                        {canEdit && (
+                          <span className="text-muted-foreground/50 text-[0.6875rem]">·</span>
+                        )}
+                        <AlertDialog
+                          open={deleteDialogOpen}
+                          onOpenChange={setDeleteDialogOpen}
+                        >
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            className="h-auto py-0.5 px-1 text-[0.6875rem] text-destructive/70 hover:bg-transparent hover:text-destructive/90"
+                            onClick={() => setDeleteDialogOpen(true)}
+                          >
+                            Delete
+                          </Button>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete answer?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently remove this answer and its
+                                comments. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel disabled={isDeleting}>
+                                Cancel
+                              </AlertDialogCancel>
+                              <Button
+                                variant="destructive"
+                                onClick={handleDeleteConfirm}
+                                disabled={isDeleting}
+                              >
+                                {isDeleting ? "Deleting..." : "Delete"}
+                              </Button>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                        {error && (
+                          <span className="text-xs text-destructive">{error}</span>
+                        )}
+                      </>
+                    )}
+                  </ItemActions>
+                </ItemFooter>
+                {!isEditing && (
+                  <div className="basis-full mt-0">
+                    <CommentList
+                      comments={answer.comments}
+                      parentType="answer"
+                      parentId={answer.id}
+                      questionId={questionId}
+                      currentUserId={currentUserId}
+                      isAdmin={isAdmin}
+                      canComment={canComment}
+                    />
+                  </div>
                 )}
-              </div>
-              <CommentList
-                comments={answer.comments}
-                parentType="answer"
-                parentId={answer.id}
-                questionId={questionId}
-                currentUserId={currentUserId}
-                isAdmin={isAdmin}
-              />
-            </>
-          )}
+              </>
+            )}
+          </Item>
         </div>
       </div>
     </div>

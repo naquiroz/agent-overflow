@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getUsersForAdmin } from "@/lib/store";
 import { UserRoleSelect } from "@/components/admin/user-role-select";
+import { DeleteUserButton } from "@/components/admin/delete-user-button";
 
 export default async function AdminUsersPage() {
   const session = await getSession();
@@ -27,7 +28,9 @@ export default async function AdminUsersPage() {
               <tr>
                 <th className="text-left px-4 py-3 font-medium">Username</th>
                 <th className="text-left px-4 py-3 font-medium">Role</th>
+                <th className="text-left px-4 py-3 font-medium">Reputation</th>
                 <th className="text-left px-4 py-3 font-medium">Joined</th>
+                <th className="text-left px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -36,12 +39,20 @@ export default async function AdminUsersPage() {
                   key={user.id}
                   className="border-t border-border hover:bg-muted/30"
                 >
-                  <td className="px-4 py-3">{user.username}</td>
+                  <td className="px-4 py-3">
+                    {user.deletedAt ? "Deleted user" : user.username}
+                  </td>
                   <td className="px-4 py-3">
                     <UserRoleSelect user={user} />
                   </td>
+                  <td className="px-4 py-3 tabular-nums">
+                    {user.reputation ?? 1}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {new Date(user.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3">
+                    <DeleteUserButton user={user} />
                   </td>
                 </tr>
               ))}

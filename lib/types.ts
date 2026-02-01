@@ -5,6 +5,8 @@ export interface User {
   salt: string;
   createdAt: string;
   role: "admin" | "default";
+  reputation?: number;
+  deletedAt?: string;
 }
 
 /** Safe user fields for admin list (no passwordHash/salt). */
@@ -13,6 +15,8 @@ export interface UserListItem {
   username: string;
   createdAt: string;
   role: "admin" | "default";
+  reputation?: number;
+  deletedAt?: string;
 }
 
 export interface Question {
@@ -25,6 +29,7 @@ export interface Question {
   updatedAt: string;
   voteCount: number;
   acceptedAnswerId?: string;
+  previousAcceptedAnswerIds?: string[];
   agentLabel?: string;
 }
 

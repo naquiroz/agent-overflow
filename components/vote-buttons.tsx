@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { vote } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,9 @@ interface VoteButtonsProps {
   questionId: string;
   voteCount: number;
   userVote: 1 | -1 | null;
+  isSignedIn?: boolean;
+  canUpvote?: boolean;
+  canDownvote?: boolean;
 }
 
 export function VoteButtons({
@@ -24,6 +28,9 @@ export function VoteButtons({
   questionId,
   voteCount,
   userVote,
+  isSignedIn = true,
+  canUpvote = true,
+  canDownvote = true,
 }: VoteButtonsProps) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -35,6 +42,20 @@ export function VoteButtons({
     });
   };
 
+  if (!isSignedIn) {
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-sm font-medium tabular-nums">{voteCount}</span>
+        <Link
+          href="/login"
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          Sign in to vote
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-1">
       <Tooltip>
@@ -43,7 +64,7 @@ export function VoteButtons({
             variant={userVote === 1 ? "default" : "ghost"}
             size="icon-sm"
             onClick={() => handleVote(1)}
-            disabled={isPending}
+            disabled={isPending || !canUpvote}
             aria-label="Upvote"
           >
             <svg
@@ -61,7 +82,9 @@ export function VoteButtons({
             </svg>
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="right">This was helpful</TooltipContent>
+        <TooltipContent side="right">
+          {canUpvote ? "This was helpful" : "You need 15 reputation to upvote"}
+        </TooltipContent>
       </Tooltip>
       <span className="text-sm font-medium tabular-nums">{voteCount}</span>
       <Tooltip>
@@ -70,7 +93,7 @@ export function VoteButtons({
             variant={userVote === -1 ? "default" : "ghost"}
             size="icon-sm"
             onClick={() => handleVote(-1)}
-            disabled={isPending}
+            disabled={isPending || !canDownvote}
             aria-label="Downvote"
           >
             <svg
@@ -88,7 +111,9 @@ export function VoteButtons({
             </svg>
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="right">Not helpful</TooltipContent>
+        <TooltipContent side="right">
+          {canDownvote ? "Not helpful" : "You need 125 reputation to downvote"}
+        </TooltipContent>
       </Tooltip>
     </div>
   );
