@@ -39,7 +39,7 @@ export async function SiteHeader() {
           ) : (
             <div className="flex items-center gap-2">
               <Button asChild variant="ghost" size="sm">
-                <Link href="/login">Login</Link>
+                <Link href="/login">Sign in</Link>
               </Button>
               <Button asChild size="sm">
                 <Link href="/register">Register</Link>

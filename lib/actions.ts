@@ -28,20 +28,20 @@ export async function register(
   const confirmPassword = formData.get("confirmPassword") as string;
 
   if (!username || username.length < 3) {
-    return { error: "Username must be at least 3 characters" };
+    return { error: "Use at least 3 characters for your username." };
   }
 
   if (!password || password.length < 6) {
-    return { error: "Password must be at least 6 characters" };
+    return { error: "Use at least 6 characters for your password." };
   }
 
   if (password !== confirmPassword) {
-    return { error: "Passwords do not match" };
+    return { error: "Passwords don't match. Please check and try again." };
   }
 
   const existingUser = getUserByUsername(username);
   if (existingUser) {
-    return { error: "Username already taken" };
+    return { error: "This username is already taken. Try another." };
   }
 
   const store = readStore();
@@ -70,17 +70,17 @@ export async function login(
   const password = formData.get("password") as string;
 
   if (!username || !password) {
-    return { error: "Username and password are required" };
+    return { error: "Please enter your username and password." };
   }
 
   const user = getUserByUsername(username);
   if (!user) {
-    return { error: "Invalid username or password" };
+    return { error: "Username or password is incorrect. Please try again." };
   }
 
   const hash = hashPassword(password, user.salt);
   if (hash !== user.passwordHash) {
-    return { error: "Invalid username or password" };
+    return { error: "Username or password is incorrect. Please try again." };
   }
 
   await setSession(user.id);
@@ -135,11 +135,11 @@ export async function createQuestion(
   const agentLabel = (formData.get("agentLabel") as string) || undefined;
 
   if (!title || title.length < 10) {
-    return { error: "Title must be at least 10 characters" };
+    return { error: "Use at least 10 characters for the title." };
   }
 
   if (!body || body.length < 20) {
-    return { error: "Body must be at least 20 characters" };
+    return { error: "Use at least 20 characters for the body." };
   }
 
   const tags = tagsRaw
@@ -185,11 +185,11 @@ export async function updateQuestion(
   const agentLabel = (formData.get("agentLabel") as string) || undefined;
 
   if (!title || title.length < 10) {
-    return { error: "Title must be at least 10 characters" };
+    return { error: "Use at least 10 characters for the title." };
   }
 
   if (!body || body.length < 20) {
-    return { error: "Body must be at least 20 characters" };
+    return { error: "Use at least 20 characters for the body." };
   }
 
   const tags = tagsRaw
@@ -205,7 +205,7 @@ export async function updateQuestion(
     return { error: "Question not found" };
   }
   if (question.authorId !== session.id && session.role !== "admin") {
-    return { error: "You can only edit your own questions" };
+    return { error: "You can only edit questions you posted." };
   }
 
   question.title = title;
@@ -279,7 +279,7 @@ export async function createAnswer(
   const agentLabel = (formData.get("agentLabel") as string) || undefined;
 
   if (!body || body.length < 10) {
-    return { error: "Answer must be at least 10 characters" };
+    return { error: "Use at least 10 characters for your answer." };
   }
 
   const store = readStore();
@@ -321,7 +321,7 @@ export async function updateAnswer(
   const agentLabel = (formData.get("agentLabel") as string) || undefined;
 
   if (!body || body.length < 10) {
-    return { error: "Answer must be at least 10 characters" };
+    return { error: "Use at least 10 characters for your answer." };
   }
 
   const store = readStore();
@@ -330,7 +330,7 @@ export async function updateAnswer(
     return { error: "Answer not found" };
   }
   if (answer.authorId !== session.id && session.role !== "admin") {
-    return { error: "You can only edit your own answers" };
+    return { error: "You can only edit answers you posted." };
   }
 
   answer.body = body;
@@ -397,7 +397,7 @@ export async function createComment(
   const agentLabel = (formData.get("agentLabel") as string) || undefined;
 
   if (!body || body.length < 5) {
-    return { error: "Comment must be at least 5 characters" };
+    return { error: "Use at least 5 characters for your comment." };
   }
 
   const store = readStore();
@@ -433,7 +433,7 @@ export async function updateComment(
   const agentLabel = (formData.get("agentLabel") as string) || undefined;
 
   if (!body || body.length < 5) {
-    return { error: "Comment must be at least 5 characters" };
+    return { error: "Use at least 5 characters for your comment." };
   }
 
   const store = readStore();
@@ -442,7 +442,7 @@ export async function updateComment(
     return { error: "Comment not found" };
   }
   if (comment.authorId !== session.id && session.role !== "admin") {
-    return { error: "You can only edit your own comments" };
+    return { error: "You can only edit comments you posted." };
   }
 
   comment.body = body;
