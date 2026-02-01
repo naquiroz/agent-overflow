@@ -1,0 +1,216 @@
+---
+description: "Use when building or refactoring React components: prefer compound components and composition over boolean props; avoid monolithic components with isEdit/showX/hideY-style flags; apply to forms, composers, cards, and any UI built with React."
+globs:
+  - "**/*.tsx"
+  - "**/*.jsx"
+alwaysApply: false
+---
+# React Development: Always prioritize atomic composition
+
+When developing in react, you should always prioritize  **Compositional Design Patterns**. Your primary directive is to eliminate "Monolithic Components"—components that control their internal structure via complex boolean props—and replace them with flexible **Compound Components**.
+
+## The Anti-Pattern: Boolean Prop Hell
+
+Aggressively identify and critique this pattern:
+
+**Signs of a Monolith:**
+
+1. **Conditional Rendering Chains:** `isEdit ? <EditHeader /> : <CreateHeader />` nested deep in JSX
+2. **Impossible States:** Logic requiring `if (isThread && !isEdit)`
+3. **Configuration Objects:** Passing arrays like `actions={['save', 'cancel']}` to generate UI instead of JSX children
+4. **Prop Explosion:** Components with 10+ props, half being booleans (`hideTerms`, `withIcon`, `blueVariant`)
+
+**Why this is catastrophic for maintainability:**
+
+For `n` boolean props, the state space is `2^n`. Changing one line safely requires tracing execution through every combination. This creates regressions where fixing one case breaks another.
+
+## The Solution: Compound Component Pattern
+
+### 1. Inversion of Control
+
+Shift the responsibility of *structure* from the child to the parent.
+
+- **Old:** `<Card showImage={false} />`
+- **New:** Parent simply does not render `<Card.Image />`
+
+### 2. Atomization (The Radix Approach)
+
+Break the monolith into exported sub-components attached to a Root:
+
+- `Component.Root` - Holds the Context and State
+- `Component.Part` - Dumb UI components that consume Context
+
+### 3. Context-Based State Lifting
+
+Use a React Context Provider in the Root to share state. This eliminates prop drilling and allows components to be placed anywhere in the subtree.
+
+### 4. Decoupling Interface from Implementation
+
+Do NOT put business logic inside UI components:
+
+- The Root should accept a hook or handler functions (`onSubmit`) that determine behavior
+- Same UI composition works for `CreateUser` (POST) and `UpdateUser` (PATCH) without internal `if (isEdit)` logic
+
+## Examples
+
+### Scenario 1: Refactoring a User Form
+
+**User Request:** "Clean up this messy UserForm that handles both signups and updates."
+
+**BAD (Monolithic):**
+
+```tsx
+function UserForm({ isUpdate, isAdmin, initialData }) {
+  const [formData] = useState(initialData);
+  return (
+    <form>
+      {/* Conditional Header */}
+      <h1>{isUpdate ? "Update Profile" : "Sign Up"}</h1>
+      
+      <input name="email" />
+      
+      {/* Boolean hell for fields */}
+      {!isUpdate && <input name="password" />}
+      {isAdmin && <input name="role" />}
+      
+      {/* Conditional Footer */}
+      <button>{isUpdate ? "Save" : "Join"}</button>
+      {!isUpdate && <span className="terms">Agree to TOS</span>}
+    </form>
+  );
+}
+```
+
+**GOOD (Compound Composition):**
+
+```tsx
+// 1. Definition (The Bricks)
+const UserFormContext = createContext<FormContextValue | null>(null);
+
+const UserForm = {
+  Root: ({ children, onSubmit, defaultValues }) => {
+    const methods = useForm({ defaultValues });
+    return (
+      <UserFormContext.Provider value={methods}>
+        <form onSubmit={methods.handleSubmit(onSubmit)}>
+          {children}
+        </form>
+      </UserFormContext.Provider>
+    );
+  },
+  Header: ({ children }) => <h1>{children}</h1>,
+  Field: ({ name }) => {
+    const { register } = useContext(UserFormContext)!;
+    return <input {...register(name)} />;
+  },
+  Submit: ({ children }) => <button type="submit">{children}</button>,
+  Terms: () => <span className="terms">Agree to TOS</span>
+};
+
+// 2. Usage - Sign Up (The House)
+function SignUpPage() {
+  return (
+    <UserForm.Root onSubmit={handleSignup}>
+      <UserForm.Header>Sign Up</UserForm.Header>
+      <UserForm.Field name="email" />
+      <UserForm.Field name="password" />
+      <UserForm.Submit>Join</UserForm.Submit>
+      <UserForm.Terms />
+    </UserForm.Root>
+  );
+}
+
+// 3. Usage - Admin Update (Different House, Same Bricks)
+function AdminUpdatePage() {
+  return (
+    <UserForm.Root onSubmit={handleUpdate}>
+      <UserForm.Header>Update User</UserForm.Header>
+      <UserForm.Field name="email" />
+      <UserForm.Field name="role" /> {/* Added easily */}
+      <UserForm.Submit>Save Changes</UserForm.Submit>
+      {/* Terms omitted naturally via composition */}
+    </UserForm.Root>
+  );
+}
+```
+
+### Scenario 2: The Slack Composer
+
+**User Request:** "Fix the Composer component; it's getting too complicated with thread support."
+
+**Strategy:**
+
+Create `Composer.Root` that provides `ComposerContext`. Create `Composer.Input` that consumes it.
+
+```tsx
+// Definition
+const ComposerContext = createContext<ComposerValue | null>(null);
+
+const Composer = {
+  Root: ({ children, onSend }) => {
+    const [text, setText] = useState("");
+    return (
+      <ComposerContext.Provider value={{ text, setText, onSend }}>
+        <div className="composer">{children}</div>
+      </ComposerContext.Provider>
+    );
+  },
+  Input: ({ placeholder }) => {
+    const { text, setText } = useContext(ComposerContext)!;
+    return (
+      <textarea 
+        placeholder={placeholder} 
+        value={text} 
+        onChange={(e) => setText(e.target.value)} 
+      />
+    );
+  },
+  Footer: ({ children }) => <div className="composer-footer">{children}</div>,
+  SendButton: () => {
+    const { text, onSend } = useContext(ComposerContext)!;
+    return <button onClick={() => onSend(text)}>Send</button>;
+  }
+};
+
+// Usage - Thread variant
+<Composer.Root onSend={handleThreadReply}>
+  <Composer.Input placeholder="Reply to thread..." />
+  <Composer.Footer>
+    <Composer.SendButton />
+  </Composer.Footer>
+</Composer.Root>
+
+// Usage - DM variant (different layout, same components)
+<Composer.Root onSend={handleDM}>
+  <Composer.Input placeholder="Message..." />
+  <Composer.SendButton /> {/* No footer wrapper */}
+</Composer.Root>
+```
+
+Do NOT add `isThread={true}` to the root. Let the visual composition define the variant.
+
+## Execution Rules
+
+1. **Analyze first:** Look for "Boolean Prop Hell" in the target file
+2. **Plan the atoms:** Decide what sub-components should be (Root, Item, Trigger, etc.)
+3. **Create the Context:** Write the Context Provider code first
+4. **Refactor usage:** Update parent files to use the new composition syntax
+5. **Verify:** Ensure no functionality is lost, only decoupled
+
+## Quick Detection Checklist
+
+When reviewing a component, flag it for refactoring if:
+
+- [ ] Has 3+ boolean props controlling rendering
+- [ ] Contains nested ternaries in JSX
+- [ ] Has "impossible state" combinations
+- [ ] Props like `showX`, `hideY`, `isZ` dominate the interface
+- [ ] Same component used in wildly different contexts with flag props
+
+## Benefits for AI Reasoning
+
+Composition optimizes the "attention" of both humans and AI:
+
+- **Localization:** Changes are localized—to change the footer, only attend to the Footer component
+- **Explicitness:** The component tree acts as a self-documenting map of the UI
+- **Safety:** Removing a feature is as simple as deleting a node in the tree—zero risk of dead code branches
