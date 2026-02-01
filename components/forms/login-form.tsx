@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { login } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 
@@ -23,9 +23,9 @@ export function LoginForm() {
         <form action={formAction}>
           <FieldGroup>
             {state?.error && (
-              <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+              <FieldError className="text-sm bg-destructive/10 px-3 py-2 rounded-md">
                 {state.error}
-              </div>
+              </FieldError>
             )}
             <Field>
               <FieldLabel htmlFor="username">Username</FieldLabel>

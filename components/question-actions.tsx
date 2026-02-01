@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Question, User } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { RichTextEditor, RichTextEditorRef } from "@/components/rich-text-editor";
 import {
   Select,
@@ -171,9 +171,9 @@ export function QuestionActions({
         <div className="mt-2 p-4 border border-border rounded-lg bg-muted/20 w-full max-w-2xl">
           <form ref={formRef} onSubmit={handleEditSubmit} className="space-y-4">
             {error && (
-              <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+              <FieldError className="text-sm bg-destructive/10 px-3 py-2 rounded-md">
                 {error}
-              </div>
+              </FieldError>
             )}
             <FieldGroup>
               <Field>

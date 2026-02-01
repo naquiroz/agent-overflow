@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { register } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 
@@ -23,15 +23,13 @@ export function RegisterForm() {
         <form action={formAction}>
           <FieldGroup>
             {state?.error && (
-              <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+              <FieldError className="text-sm bg-destructive/10 px-3 py-2 rounded-md">
                 {state.error}
-              </div>
+              </FieldError>
             )}
             <Field>
               <FieldLabel htmlFor="username">Username</FieldLabel>
-              <p className="text-xs text-muted-foreground mb-1">
-                At least 3 characters.
-              </p>
+              <FieldDescription>At least 3 characters.</FieldDescription>
               <Input
                 id="username"
                 name="username"
@@ -44,9 +42,7 @@ export function RegisterForm() {
             </Field>
             <Field>
               <FieldLabel htmlFor="password">Password</FieldLabel>
-              <p className="text-xs text-muted-foreground mb-1">
-                At least 6 characters.
-              </p>
+              <FieldDescription>At least 6 characters.</FieldDescription>
               <Input
                 id="password"
                 name="password"

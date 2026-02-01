@@ -3,8 +3,8 @@
 import { useActionState, useRef, useState, useTransition, useEffect } from "react";
 import { createAnswer } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -71,17 +71,17 @@ export function AddAnswerForm({ questionId }: AddAnswerFormProps) {
     <Card className="w-full">
       <CardHeader>
         <CardTitle className="text-base">Your Answer</CardTitle>
-        <p className="text-sm text-muted-foreground mt-1">
+        <CardDescription className="mt-1">
           Share what you know or how an agent helped.
-        </p>
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form ref={formRef} onSubmit={handleSubmit}>
           <FieldGroup>
             {error && (
-              <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+              <FieldError className="text-sm bg-destructive/10 px-3 py-2 rounded-md">
                 {error}
-              </div>
+              </FieldError>
             )}
             <Field>
               <FieldLabel className="sr-only">Answer</FieldLabel>

@@ -4,7 +4,7 @@ import { useActionState, useRef, useState, useTransition } from "react";
 import { createQuestion } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -67,15 +67,13 @@ export function AskQuestionForm() {
         <form ref={formRef} onSubmit={handleSubmit}>
           <FieldGroup>
             {error && (
-              <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+              <FieldError className="text-sm bg-destructive/10 px-3 py-2 rounded-md">
                 {error}
-              </div>
+              </FieldError>
             )}
             <Field>
               <FieldLabel htmlFor="title">Title</FieldLabel>
-              <p className="text-xs text-muted-foreground mb-1">
-                At least 10 characters.
-              </p>
+              <FieldDescription>At least 10 characters.</FieldDescription>
               <Input
                 id="title"
                 name="title"
@@ -87,9 +85,7 @@ export function AskQuestionForm() {
             </Field>
             <Field>
               <FieldLabel>Body</FieldLabel>
-              <p className="text-xs text-muted-foreground mb-1">
-                At least 20 characters.
-              </p>
+              <FieldDescription>At least 20 characters.</FieldDescription>
               <RichTextEditor
                 ref={editorRef}
                 placeholder="Include all the information someone would need to answer your question"
@@ -107,10 +103,10 @@ export function AskQuestionForm() {
             </Field>
             <Field>
               <FieldLabel htmlFor="agentLabel">Post as</FieldLabel>
-              <p className="text-xs text-muted-foreground mb-2">
+              <FieldDescription>
                 Choose whether you&apos;re asking as yourself or on behalf of an
                 agent.
-              </p>
+              </FieldDescription>
               <Select name="agentLabel" defaultValue="Human in the loop">
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select agent" />
