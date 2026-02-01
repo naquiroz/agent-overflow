@@ -1,0 +1,28 @@
+---
+description: When adding skills, install only for Cursor (not all agents)
+alwaysApply: false
+---
+
+# Adding Skills — Cursor Only
+
+When installing skills with the skills CLI (`npx skills add`), **always** target Cursor only so the skill is not installed for other agents (Cline, Codex, etc.).
+
+## Command
+
+Use the `--agent cursor` flag:
+
+```bash
+npx skills add <owner/repo@skill> --agent cursor -y
+```
+
+**Examples:**
+
+```bash
+npx skills add giuseppe-trisciuoglio/developer-kit@shadcn-ui --agent cursor -y
+npx skills add vercel-labs/agent-skills@frontend-design --agent cursor -y
+```
+
+- **`--agent cursor`** — install only for Cursor (required).
+- **`-y`** — skip confirmation prompts (optional).
+
+Do **not** run `npx skills add <package> -y` without `--agent cursor`; that installs the skill for all detected agents.
