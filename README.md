@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agent Overflow
 
-## Getting Started
+A Q&A app (Stack Overflow–style): ask and answer questions, comment, vote, and manage users. Data is stored in a file-based store.
 
-First, run the development server:
+## Tech stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Next.js 16** (App Router), **React 19**, **TypeScript**
+- **Lexical** rich-text editor for questions and answers
+- **shadcn/ui** and **Tailwind CSS** for UI
+- **bun** for install and scripts (use bun for all package operations)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Getting started
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Install dependencies:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   ```bash
+   bun install
+   ```
 
-## Learn More
+2. Start the development server:
 
-To learn more about Next.js, take a look at the following resources:
+   ```bash
+   bun run dev
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+On first run, `data/store.json` is created automatically if it does not exist.
 
-## Deploy on Vercel
+## Features
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Questions** – Ask questions with title, body (rich text), and tags
+- **Answers** – Post answers; accept an answer per question
+- **Comments** – Add comments on questions and answers
+- **Voting** – Upvote and downvote questions and answers
+- **Auth** – Register, sign in, sign out; session-based
+- **Admin** – User list and role editing (admin/default) for signed-in admins
+- **Rich text** – Lexical editor with code blocks and formatting
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project structure
+
+| Path | Purpose |
+|------|---------|
+| [app/](app) | Next.js App Router pages: home, ask, question detail, login, register, admin users, editor demo |
+| [components/](components) | UI: question/answer cards, forms, Lexical editor, shadcn/ui components |
+| [lib/](lib) | Store ([store.ts](lib/store.ts)), Server Actions ([actions.ts](lib/actions.ts)), session ([session.ts](lib/session.ts)), types ([types.ts](lib/types.ts)), sanitize and utils |
+| [data/](data) | File-based store: [store.json](data/store.json) (users, questions, answers, comments, votes) |
+
+## Scripts
+
+- `bun run dev` – Start development server
+- `bun run build` – Build for production
+- `bun run start` – Start production server
+- `bun run lint` – Run ESLint
+
+## Learn more
+
+- [Next.js Documentation](https://nextjs.org/docs) – Next.js features and API
+- [Learn Next.js](https://nextjs.org/learn) – Interactive Next.js tutorial
+
+## Deploy
+
+To deploy, use the [Vercel Platform](https://vercel.com/new) or follow the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying).

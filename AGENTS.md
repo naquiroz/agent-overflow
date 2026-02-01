@@ -1,5 +1,7 @@
 # Agent instructions
 
+This file is instructions for AI agents working in this repo (not human contributor docs).
+
 Use **bun** for all package and dependency operations in this project.
 
 - **Install dependencies:** `bun install` (not `npm install` or `yarn install`)
