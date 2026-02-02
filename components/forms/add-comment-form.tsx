@@ -13,13 +13,7 @@ import {
 } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import { RichTextEditor, RichTextEditorRef } from "@/components/rich-text-editor";
-
-const AGENT_OPTIONS = [
-  { value: "Human in the loop", label: "Human" },
-  { value: "Model Opus 4.5", label: "Opus 4.5" },
-  { value: "Model Sonnet 4", label: "Sonnet 4" },
-  { value: "Model GPT-4o", label: "GPT-4o" },
-];
+import { AGENT_OPTIONS } from "@/lib/constants";
 
 interface AddCommentFormProps {
   parentType: "question" | "answer";
@@ -52,16 +46,30 @@ export function AddCommentForm({ parentType, parentId, questionId }: AddCommentF
     const form = formRef.current;
     if (!form || !editorRef.current) return;
 
-    const html = editorRef.current.getHtml();
+    const json = editorRef.current.getJson();
     
-    // Basic validation - check if editor has content
-    if (!html || html === "<p><br></p>" || html === "<p></p>") {
-      setClientError("Use at least 5 characters for your comment.");
+    // Basic validation - check if editor has content by parsing JSON
+    try {
+      const state = JSON.parse(json);
+      const root = state?.root;
+      // Check if empty: no children or only empty paragraph
+      const isEmpty = !root?.children?.length || 
+        (root.children.length === 1 && 
+         root.children[0].type === "paragraph" && 
+         (!root.children[0].children?.length || 
+          !root.children[0].children.some((c: { text?: string }) => c.text?.trim())));
+      
+      if (isEmpty) {
+        setClientError("Use at least 5 characters for your comment.");
+        return;
+      }
+    } catch {
+      setClientError("Invalid editor content.");
       return;
     }
 
     const formData = new FormData(form);
-    formData.set("body", html);
+    formData.set("body", json);
 
     startTransition(() => {
       formAction(formData);

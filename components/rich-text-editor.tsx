@@ -16,8 +16,6 @@ import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { $generateHtmlFromNodes, $generateNodesFromDOM } from "@lexical/html";
-import { $getRoot } from "lexical";
 import { SerializedEditorState, LexicalEditor } from "lexical";
 import { HeadingNode, QuoteNode, registerRichText } from "@lexical/rich-text";
 import { ListNode, ListItemNode, registerList } from "@lexical/list";
@@ -32,14 +30,13 @@ import { HorizontalRuleNode } from "@lexical/react/LexicalHorizontalRuleNode";
 import { editorTheme } from "@/components/editor/themes/editor-theme";
 import { ContentEditable } from "@/components/editor/editor-ui/content-editable";
 import { CodeHighlightPlugin } from "@/components/editor/plugins/code-highlight-plugin";
-import { ActionsPlugin } from "@/components/editor/plugins/actions/actions-plugin";
-import { CopyCodeAction } from "@/components/editor/plugins/actions/copy-code-action";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { EditorToolbar } from "@/components/editor-toolbar";
 import { cn } from "@/lib/utils";
 
 export interface RichTextEditorRef {
-  getHtml: () => string;
+  /** Returns the editor state as a JSON string (SerializedEditorState) */
+  getJson: () => string;
 }
 
 interface RichTextEditorProps {
@@ -47,11 +44,11 @@ interface RichTextEditorProps {
   className?: string;
   minHeight?: string;
   initialContent?: SerializedEditorState;
-  /** When provided, initializes editor content from HTML (e.g. for edit forms). Ignored if initialContent is set. */
-  initialHtml?: string;
+  /** When provided, initializes editor content from JSON string (for edit forms). */
+  initialJson?: string;
 }
 
-// Internal component to capture editor ref and provide getHtml
+// Internal component to capture editor ref
 function EditorRefPlugin({
   editorRef,
 }: {
@@ -59,25 +56,6 @@ function EditorRefPlugin({
 }) {
   const [editor] = useLexicalComposerContext();
   editorRef.current = editor;
-  return null;
-}
-
-// When initialHtml is set, populate the editor once on mount
-function InitialContentFromHtmlPlugin({ initialHtml }: { initialHtml: string }) {
-  const [editor] = useLexicalComposerContext();
-  useEffect(() => {
-    if (!initialHtml?.trim()) return;
-    editor.update(() => {
-      const parser = new DOMParser();
-      const dom = parser.parseFromString(initialHtml, "text/html").body;
-      const nodes = $generateNodesFromDOM(editor, dom);
-      const root = $getRoot();
-      root.clear();
-      for (const node of nodes) {
-        root.append(node);
-      }
-    });
-  }, [editor, initialHtml]);
   return null;
 }
 
@@ -95,7 +73,8 @@ function RegisterPlugins() {
   return null;
 }
 
-const nodes = [
+// Exported for use in headless editor (lib/lexical-utils.ts)
+export const editorNodes = [
   HeadingNode,
   QuoteNode,
   ListNode,
@@ -109,16 +88,16 @@ const nodes = [
 const editorConfig: InitialConfigType = {
   namespace: "RichTextEditor",
   theme: editorTheme,
-  nodes,
+  nodes: editorNodes,
   onError: (error: Error) => {
     console.error(error);
   },
 };
 
-// Default empty state for the editor
+// Default empty state for the editor (exported for reuse)
 // Use type assertion since Lexical's SerializedEditorState type doesn't include 'children'
 // in its base type, but the actual runtime structure requires it
-const defaultEditorState = {
+export const defaultEditorState = {
   root: {
     children: [
       {
@@ -147,28 +126,40 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       className,
       minHeight = "150px",
       initialContent,
-      initialHtml,
+      initialJson,
     },
     ref
   ) {
     const lexicalEditorRef = useRef<LexicalEditor | null>(null);
     const [, setEditorState] = useState<SerializedEditorState | null>(null);
 
-    const getHtml = useCallback((): string => {
+    // Returns the editor state as a JSON string
+    const getJson = useCallback((): string => {
       const editor = lexicalEditorRef.current;
-      if (!editor) return "";
+      if (!editor) return JSON.stringify(defaultEditorState);
 
-      let html = "";
-      editor.getEditorState().read(() => {
-        html = $generateHtmlFromNodes(editor, null);
-      });
-      return html;
+      return JSON.stringify(editor.getEditorState().toJSON());
     }, []);
 
-    useImperativeHandle(ref, () => ({ getHtml }), [getHtml]);
+    useImperativeHandle(ref, () => ({ getJson }), [getJson]);
 
-    const initialState =
-      initialContent ?? (initialHtml ? defaultEditorState : defaultEditorState);
+    // Determine initial state: use initialContent, parse initialJson, or use default
+    const getInitialState = (): string => {
+      if (initialContent) {
+        return JSON.stringify(initialContent);
+      }
+      if (initialJson) {
+        // initialJson is already a JSON string, validate it's parseable
+        try {
+          JSON.parse(initialJson);
+          return initialJson;
+        } catch {
+          console.error("Invalid initialJson provided to RichTextEditor");
+          return JSON.stringify(defaultEditorState);
+        }
+      }
+      return JSON.stringify(defaultEditorState);
+    };
 
     return (
       <div
@@ -180,11 +171,10 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         <LexicalComposer
           initialConfig={{
             ...editorConfig,
-            editorState: JSON.stringify(initialState),
+            editorState: getInitialState(),
           }}
         >
           <TooltipProvider>
-            {initialHtml && <InitialContentFromHtmlPlugin initialHtml={initialHtml} />}
             <RegisterPlugins />
             <EditorToolbar />
             <div className="relative">
@@ -202,16 +192,6 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
               <LinkPlugin />
               <MarkdownShortcutPlugin />
             </div>
-
-            <ActionsPlugin>
-              <div className="clear-both flex items-center justify-between gap-2 overflow-auto border-t bg-muted/20 px-2 py-1.5">
-                <div className="flex flex-1 justify-start" />
-                <div />
-                <div className="flex flex-1 justify-end">
-                  <CopyCodeAction />
-                </div>
-              </div>
-            </ActionsPlugin>
 
             <EditorRefPlugin editorRef={lexicalEditorRef} />
 

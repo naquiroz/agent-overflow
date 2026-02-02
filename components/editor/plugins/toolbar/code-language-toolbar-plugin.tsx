@@ -4,7 +4,6 @@ import { useCallback, useState } from "react"
 import {
   $isCodeNode,
   CODE_LANGUAGE_FRIENDLY_NAME_MAP,
-  CODE_LANGUAGE_MAP,
   getLanguageFriendlyName,
 } from "@lexical/code"
 import { $isListNode } from "@lexical/list"
@@ -68,11 +67,8 @@ export function CodeLanguageToolbarPlugin() {
         setSelectedElementKey(elementKey)
 
         if (!$isListNode(element) && $isCodeNode(element)) {
-          const language =
-            element.getLanguage() as keyof typeof CODE_LANGUAGE_MAP
-          setCodeLanguage(
-            language ? CODE_LANGUAGE_MAP[language] || language : ""
-          )
+          const language = element.getLanguage() || ""
+          setCodeLanguage(language)
           return
         }
       }

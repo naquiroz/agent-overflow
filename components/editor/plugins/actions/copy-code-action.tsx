@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $isCodeNode } from "@lexical/code";
 import { $getNodeByKey, $getSelection, $isRangeSelection } from "lexical";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { IconCheck, IconCopy } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -75,9 +75,9 @@ export function CopyCodeAction() {
           aria-label="Copy code"
         >
           {copied ? (
-            <CheckIcon className="h-4 w-4 text-green-600" />
+            <IconCheck className="h-4 w-4 text-green-600" />
           ) : (
-            <CopyIcon className="h-4 w-4" />
+            <IconCopy className="h-4 w-4" />
           )}
           <span className="text-xs">{copied ? "Copied" : "Copy code"}</span>
         </Button>

@@ -2,6 +2,8 @@
  * Utility functions for HTML sanitization and stripping
  */
 
+import { isLexicalJson, extractTextContent } from "@/lib/lexical-utils";
+
 /**
  * Strip HTML tags from a string to get plain text.
  * Works on both server and client.
@@ -43,10 +45,23 @@ export function looksLikeHtml(content: string): boolean {
 }
 
 /**
- * Get an excerpt from body content, stripping HTML if necessary.
+ * Strip HTML tags and collapse whitespace to plain text (tags become spaces).
+ * Use for edit form defaults and similar display of raw content.
+ */
+export function stripHtmlToText(html: string): string {
+  if (!html) return "";
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Get an excerpt from body content, handling both Lexical JSON and HTML.
  */
 export function getExcerpt(body: string, maxLength: number = 150): string {
-  const plainText = stripHtml(body);
+  // Handle Lexical JSON content
+  const plainText = isLexicalJson(body)
+    ? extractTextContent(body)
+    : stripHtml(body);
+
   if (plainText.length <= maxLength) {
     return plainText;
   }

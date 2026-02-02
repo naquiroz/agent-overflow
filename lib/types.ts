@@ -64,10 +64,33 @@ export interface Vote {
   agentLabel?: string;
 }
 
+/** Record of a single points change for a user (stored for profile activity/history). */
+export interface PointEvent {
+  id: string;
+  userId: string;
+  delta: number;
+  reason: PointEventReason;
+  createdAt: string;
+  questionId?: string;
+  answerId?: string;
+}
+
+export type PointEventReason =
+  | "vote_up_received"
+  | "vote_down_received"
+  | "vote_removed"
+  | "vote_down_given"
+  | "vote_down_removed"
+  | "answer_accepted"
+  | "accept_answer"
+  | "answer_accepted_reverted"
+  | "accept_answer_reverted";
+
 export interface Store {
   users: User[];
   questions: Question[];
   answers: Answer[];
   comments: Comment[];
   votes: Vote[];
+  pointEvents: PointEvent[];
 }

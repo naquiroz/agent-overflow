@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useTransition,
+  useCallback,
+  useRef,
+} from "react";
 import { useRouter } from "next/navigation";
 import type { Answer, Comment, User } from "@/lib/types";
 import { VoteButtons } from "@/components/vote-buttons";
@@ -8,7 +15,7 @@ import { CommentList } from "@/components/comment-list";
 import { Byline } from "@/components/byline";
 import { BodyContent } from "@/components/body-content";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor, RichTextEditorRef } from "@/components/rich-text-editor";
 import {
   Select,
   SelectContent,
@@ -16,8 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateAnswer, deleteAnswer, setChosenAnswer } from "@/lib/actions";
-import { displayAuthorName } from "@/lib/utils";
+import { updateAnswer, deleteAnswer, setChosenAnswer, unacceptAnswer } from "@/lib/actions";
+import { getTimeAgo } from "@/lib/utils";
+import { extractTextContent } from "@/lib/lexical-utils";
+import { AGENT_OPTIONS } from "@/lib/constants";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -27,46 +36,486 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import {
-  Item,
-  ItemContent,
-  ItemHeader,
-  ItemFooter,
-  ItemActions,
-} from "@/components/ui/item";
-import { CheckCircle2, Check } from "lucide-react";
 
-const AGENT_OPTIONS = [
-  { value: "Human in the loop", label: "Human in the loop" },
-  { value: "Model Opus 4.5", label: "Model Opus 4.5" },
-  { value: "Model Sonnet 4", label: "Model Sonnet 4" },
-  { value: "Model GPT-4o", label: "Model GPT-4o" },
-];
+type AnswerWithAuthor = Answer & {
+  author: User | undefined;
+  comments: (Comment & { author: User | undefined })[];
+};
 
-interface AnswerCardProps {
-  answer: Answer & {
-    author: User | undefined;
-    comments: (Comment & { author: User | undefined })[];
-  };
+interface AnswerCardContextValue {
+  answer: AnswerWithAuthor;
   questionId: string;
   userVote: 1 | -1 | null;
-  currentUserId?: string;
-  isAdmin?: boolean;
+  isEditing: boolean;
+  setIsEditing: (v: boolean) => void;
+  deleteDialogOpen: boolean;
+  setDeleteDialogOpen: (v: boolean) => void;
+  isPending: boolean;
+  isDeleting: boolean;
+  error: string | null;
+  setError: (v: string | null) => void;
+  agentLabel: string;
+  setAgentLabel: (v: string) => void;
+  timeAgo: string;
+  editBodyDisplay: string;
+  editorRef: React.RefObject<RichTextEditorRef | null>;
+  handleEditSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  handleDeleteConfirm: () => void;
+  onUpdate: (formData: FormData) => Promise<{ error?: string } | void>;
+  onDelete: () => Promise<{ error?: string } | void>;
   canUpvote?: boolean;
   canDownvote?: boolean;
+  isSignedIn?: boolean;
   canComment?: boolean;
-  acceptedAnswerId?: string;
+  acceptedAnswerId?: string | null;
   previousAcceptedAnswerIds?: string[];
-  questionAuthorId: string;
+  questionAuthorId?: string;
+  currentUserId?: string;
 }
 
-function stripHtmlToText(html: string): string {
-  if (!html) return "";
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+const AnswerCardContext = createContext<AnswerCardContextValue | null>(null);
+
+function useAnswerCardContext() {
+  const ctx = useContext(AnswerCardContext);
+  if (!ctx) throw new Error("AnswerCard parts must be used within AnswerCard.Root");
+  return ctx;
 }
 
-export function AnswerCard({
+interface AnswerCardRootProps {
+  answer: AnswerWithAuthor;
+  questionId: string;
+  userVote: 1 | -1 | null;
+  onUpdate: (formData: FormData) => Promise<{ error?: string } | void>;
+  onDelete: () => Promise<{ error?: string } | void>;
+  children: React.ReactNode;
+  canUpvote?: boolean;
+  canDownvote?: boolean;
+  isSignedIn?: boolean;
+  canComment?: boolean;
+  acceptedAnswerId?: string | null;
+  previousAcceptedAnswerIds?: string[];
+  questionAuthorId?: string;
+  currentUserId?: string;
+}
+
+function AnswerCardRoot({
+  answer,
+  questionId,
+  userVote,
+  onUpdate,
+  onDelete,
+  children,
+  canUpvote = true,
+  canDownvote = true,
+  isSignedIn = true,
+  canComment = true,
+  acceptedAnswerId,
+  previousAcceptedAnswerIds = [],
+  questionAuthorId,
+  currentUserId,
+}: AnswerCardRootProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [agentLabel, setAgentLabel] = useState(
+    answer.agentLabel ?? "Human in the loop"
+  );
+  const editorRef = useRef<RichTextEditorRef>(null);
+  const timeAgo = getTimeAgo(new Date(answer.createdAt));
+  const editBodyDisplay = extractTextContent(answer.body) || answer.body;
+
+  const handleEditSubmit = useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      setError(null);
+      const form = e.currentTarget;
+      const editor = editorRef.current;
+      if (!editor) return;
+      const json = editor.getJson();
+      
+      // Basic validation - check if editor has content by parsing JSON
+      try {
+        const state = JSON.parse(json);
+        const root = state?.root;
+        // Check if empty: no children or only empty paragraph
+        const isEmpty = !root?.children?.length || 
+          (root.children.length === 1 && 
+           root.children[0].type === "paragraph" && 
+           (!root.children[0].children?.length || 
+            !root.children[0].children.some((c: { text?: string }) => c.text?.trim())));
+        
+        if (isEmpty) {
+          setError("Answer must be at least 10 characters");
+          return;
+        }
+      } catch {
+        setError("Invalid editor content");
+        return;
+      }
+      
+      const formData = new FormData(form);
+      formData.set("agentLabel", agentLabel);
+      formData.set("body", json);
+      startTransition(() => {
+        onUpdate(formData).then((result) => {
+          if (result?.error) setError(result.error);
+          else setIsEditing(false);
+        });
+      });
+    },
+    [agentLabel, onUpdate]
+  );
+
+  const handleDeleteConfirm = useCallback(() => {
+    setError(null);
+    setIsDeleting(true);
+    onDelete().then((result) => {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      if (result?.error) setError(result.error);
+    });
+  }, [onDelete]);
+
+  const value: AnswerCardContextValue = {
+    answer,
+    questionId,
+    userVote,
+    isEditing,
+    setIsEditing,
+    deleteDialogOpen,
+    setDeleteDialogOpen,
+    isPending,
+    isDeleting,
+    error,
+    setError,
+    agentLabel,
+    setAgentLabel,
+    timeAgo,
+    editBodyDisplay,
+    editorRef,
+    handleEditSubmit,
+    handleDeleteConfirm,
+    onUpdate,
+    onDelete,
+    canUpvote,
+    canDownvote,
+    isSignedIn,
+    canComment,
+    acceptedAnswerId,
+    previousAcceptedAnswerIds,
+    questionAuthorId,
+    currentUserId,
+  };
+
+  return (
+    <AnswerCardContext.Provider value={value}>
+      <div className="border-b border-border py-4">
+        <div className="flex gap-4">{children}</div>
+      </div>
+    </AnswerCardContext.Provider>
+  );
+}
+
+function AnswerCardVotes() {
+  const {
+    answer,
+    questionId,
+    userVote,
+    canUpvote,
+    canDownvote,
+    isSignedIn,
+  } = useAnswerCardContext();
+  return (
+    <VoteButtons
+      entityType="answer"
+      entityId={answer.id}
+      questionId={questionId}
+      voteCount={answer.voteCount}
+      userVote={userVote}
+      isSignedIn={isSignedIn}
+      canUpvote={canUpvote}
+      canDownvote={canDownvote}
+    />
+  );
+}
+
+function AnswerCardBody() {
+  const { answer, timeAgo } = useAnswerCardContext();
+  return (
+    <>
+      <BodyContent body={answer.body} />
+      <div className="mt-4 flex items-center gap-2">
+        <Byline
+          verb="answered"
+          username={answer.author?.username ?? "Unknown"}
+          timeAgo={timeAgo}
+          agentLabel={answer.agentLabel}
+        />
+      </div>
+    </>
+  );
+}
+
+function AnswerCardEditButton() {
+  const { setIsEditing } = useAnswerCardContext();
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="text-xs text-muted-foreground"
+      onClick={() => setIsEditing(true)}
+    >
+      Edit
+    </Button>
+  );
+}
+
+function AnswerCardContent({ children }: { children: React.ReactNode }) {
+  const { isEditing } = useAnswerCardContext();
+  if (isEditing) return <AnswerCardEditForm />;
+  return <>{children}</>;
+}
+
+function AnswerCardEditForm() {
+  const {
+    answer,
+    setIsEditing,
+    setError,
+    error,
+    isPending,
+    agentLabel,
+    setAgentLabel,
+    editorRef,
+    handleEditSubmit,
+  } = useAnswerCardContext();
+
+  return (
+    <form onSubmit={handleEditSubmit} className="space-y-3">
+      {error && (
+        <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+          {error}
+        </div>
+      )}
+      <RichTextEditor
+        ref={editorRef}
+        initialJson={answer.body}
+        placeholder="Edit your answer..."
+        minHeight="120px"
+      />
+      <div className="flex items-center gap-2">
+        <Select value={agentLabel} onValueChange={setAgentLabel}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Edit as" />
+          </SelectTrigger>
+          <SelectContent>
+            {AGENT_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button type="submit" disabled={isPending}>
+          {isPending ? "Saving..." : "Save"}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            setIsEditing(false);
+            setError(null);
+          }}
+          disabled={isPending}
+        >
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+interface AnswerCardCommentsProps {
+  currentUserId?: string;
+  isAdmin?: boolean;
+}
+
+function AnswerCardComments({
+  currentUserId,
+  isAdmin,
+}: AnswerCardCommentsProps) {
+  const { answer, questionId, canComment } = useAnswerCardContext();
+  return (
+    <CommentList
+      comments={answer.comments}
+      parentType="answer"
+      parentId={answer.id}
+      questionId={questionId}
+      currentUserId={currentUserId}
+      isAdmin={isAdmin}
+      canComment={canComment}
+    />
+  );
+}
+
+function AnswerCardDeleteButton() {
+  const {
+    deleteDialogOpen,
+    setDeleteDialogOpen,
+    isDeleting,
+    handleDeleteConfirm,
+    error,
+  } = useAnswerCardContext();
+  return (
+    <>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-xs text-destructive hover:text-destructive"
+          onClick={() => setDeleteDialogOpen(true)}
+        >
+          Delete
+        </Button>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete answer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this answer and its comments. This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {error && (
+        <span className="text-xs text-destructive">{error}</span>
+      )}
+    </>
+  );
+}
+
+function AnswerCardAcceptButton({ isAdmin }: { isAdmin?: boolean }) {
+  const router = useRouter();
+  const {
+    answer,
+    questionId,
+    acceptedAnswerId,
+    previousAcceptedAnswerIds,
+    questionAuthorId,
+    currentUserId,
+  } = useAnswerCardContext();
+  const [isPending, startTransition] = useTransition();
+
+  const isAccepted = acceptedAnswerId === answer.id;
+  const wasPreviouslyAccepted = previousAcceptedAnswerIds?.includes(answer.id);
+  const canAccept =
+    currentUserId && (questionAuthorId === currentUserId || isAdmin);
+
+  const handleAccept = useCallback(() => {
+    startTransition(() => {
+      setChosenAnswer(questionId, answer.id).then(() => {
+        router.refresh();
+      });
+    });
+  }, [questionId, answer.id, router]);
+
+  const handleUnaccept = useCallback(() => {
+    startTransition(() => {
+      unacceptAnswer(questionId, answer.id).then(() => {
+        router.refresh();
+      });
+    });
+  }, [questionId, answer.id, router]);
+
+  if (!canAccept) {
+    // Just show the indicator if accepted, but no button
+    if (isAccepted) {
+      return (
+        <span className="text-xs text-green-600 font-medium">
+          ✓ Accepted
+        </span>
+      );
+    }
+    if (wasPreviouslyAccepted) {
+      return (
+        <span className="text-xs text-muted-foreground">
+          Previously accepted
+        </span>
+      );
+    }
+    return null;
+  }
+
+  if (isAccepted) {
+    return (
+      <>
+        <span className="text-xs text-green-600 font-medium">
+          ✓ Accepted
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-xs text-muted-foreground hover:text-red-600"
+          onClick={handleUnaccept}
+          disabled={isPending}
+        >
+          {isPending ? "Un-accepting..." : "Unaccept"}
+        </Button>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="text-xs text-muted-foreground hover:text-green-600"
+        onClick={handleAccept}
+        disabled={isPending}
+      >
+        {isPending ? "Accepting..." : "Mark as answer"}
+      </Button>
+      {wasPreviouslyAccepted && (
+        <span className="text-xs text-muted-foreground">
+          (previously accepted)
+        </span>
+      )}
+    </>
+  );
+}
+
+export const AnswerCard = {
+  Root: AnswerCardRoot,
+  Votes: AnswerCardVotes,
+  Body: AnswerCardBody,
+  Content: AnswerCardContent,
+  EditButton: AnswerCardEditButton,
+  EditForm: AnswerCardEditForm,
+  DeleteButton: AnswerCardDeleteButton,
+  AcceptButton: AnswerCardAcceptButton,
+  Comments: AnswerCardComments,
+};
+
+/** Client wrapper that provides handlers and composes the compound for use from server components. */
+function AnswerCardComposed({
   answer,
   questionId,
   userVote,
@@ -78,321 +527,76 @@ export function AnswerCard({
   acceptedAnswerId,
   previousAcceptedAnswerIds = [],
   questionAuthorId,
-}: AnswerCardProps) {
+}: {
+  answer: AnswerWithAuthor;
+  questionId: string;
+  userVote: 1 | -1 | null;
+  currentUserId?: string;
+  isAdmin?: boolean;
+  canUpvote?: boolean;
+  canDownvote?: boolean;
+  canComment?: boolean;
+  acceptedAnswerId?: string | null;
+  previousAcceptedAnswerIds?: string[];
+  questionAuthorId?: string;
+}) {
   const router = useRouter();
-  const [isEditing, setIsEditing] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [acceptWarningOpen, setAcceptWarningOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isAccepting, setIsAccepting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [agentLabel, setAgentLabel] = useState(
-    answer.agentLabel ?? "Human in the loop"
-  );
-  const timeAgo = getTimeAgo(new Date(answer.createdAt));
   const canEdit =
     (currentUserId && answer.authorId === currentUserId) || isAdmin;
-  const isChosenAnswer = answer.id === acceptedAnswerId;
-  const isPreviouslyChosen = previousAcceptedAnswerIds.includes(answer.id);
-  const canChooseAnswer =
-    !!currentUserId &&
-    (questionAuthorId === currentUserId || !!isAdmin);
-  const editBodyDisplay = stripHtmlToText(answer.body) || answer.body;
 
-  const runSetChosenAnswer = () => {
-    setError(null);
-    setIsAccepting(true);
-    setChosenAnswer(questionId, answer.id).then((result) => {
-      setIsAccepting(false);
-      setAcceptWarningOpen(false);
-      if (result?.error) {
-        setError(result.error);
-      } else {
-        router.refresh();
-      }
-    });
-  };
-
-  const handleAcceptClick = () => {
-    if (acceptedAnswerId && acceptedAnswerId !== answer.id) {
-      setAcceptWarningOpen(true);
-    } else {
-      runSetChosenAnswer();
-    }
-  };
-
-  const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError(null);
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    formData.set("agentLabel", agentLabel);
-    const body = (formData.get("body") as string) || "";
-    if (body.length < 10) {
-      setError("Answer must be at least 10 characters");
-      return;
-    }
-    startTransition(() => {
+  const onUpdate = useCallback(
+    (formData: FormData) =>
       updateAnswer(answer.id, questionId, undefined, formData).then(
         (result) => {
-          if (result?.error) {
-            setError(result.error);
-          } else {
-            setIsEditing(false);
-            router.refresh();
-          }
+          if (!result?.error) router.refresh();
+          return result ?? undefined;
         }
-      );
-    });
-  };
+      ),
+    [answer.id, questionId, router]
+  );
 
-  const handleDeleteConfirm = () => {
-    setError(null);
-    setIsDeleting(true);
-    deleteAnswer(answer.id, questionId).then((result) => {
-      setIsDeleting(false);
-      setDeleteDialogOpen(false);
-      if (result?.error) {
-        setError(result.error);
-      } else {
-        router.refresh();
-      }
-    });
-  };
+  const onDelete = useCallback(
+    () =>
+      deleteAnswer(answer.id, questionId).then((result) => {
+        if (!result?.error) router.refresh();
+        return result;
+      }),
+    [answer.id, questionId, router]
+  );
 
   return (
-    <div className="border-b border-border py-6 last:border-b-0">
-      <div className="flex gap-4">
-        <VoteButtons
-          entityType="answer"
-          entityId={answer.id}
-          questionId={questionId}
-          voteCount={answer.voteCount}
-          userVote={userVote}
-          isSignedIn={!!currentUserId}
-          canUpvote={canUpvote}
-          canDownvote={canDownvote}
-        />
-        <div className="flex-1 min-w-0 flex flex-col gap-0">
-          <Item
-            variant="outline"
-            size="default"
-            className="rounded-lg border-border bg-card shadow-sm px-4 py-4 flex-wrap"
-          >
-            {isEditing ? (
-              <form onSubmit={handleEditSubmit} className="basis-full space-y-3">
-                {error && (
-                  <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
-                    {error}
-                  </div>
-                )}
-                <Textarea
-                  name="body"
-                  defaultValue={editBodyDisplay}
-                  required
-                  minLength={10}
-                  rows={6}
-                  className="min-h-[120px] w-full"
-                />
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={agentLabel}
-                    onValueChange={setAgentLabel}
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Edit as" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AGENT_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button type="submit" disabled={isPending}>
-                    {isPending ? "Saving..." : "Save"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      setIsEditing(false);
-                      setError(null);
-                    }}
-                    disabled={isPending}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <>
-                <ItemHeader className="flex-wrap gap-2">
-                  {isChosenAnswer && (
-                    <Badge
-                      variant="secondary"
-                      className="gap-1.5 bg-primary/10 text-primary border-primary/20"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Accepted answer
-                    </Badge>
-                  )}
-                  {isPreviouslyChosen && (
-                    <span className="text-xs text-muted-foreground">
-                      Previously accepted solution
-                    </span>
-                  )}
-                  {canChooseAnswer && !isChosenAnswer && (
-                    <>
-                      <Button
-                        type="button"
-                        variant="default"
-                        size="sm"
-                        className="gap-1.5 shrink-0"
-                        onClick={handleAcceptClick}
-                        disabled={isAccepting}
-                      >
-                        <Check className="h-4 w-4" />
-                        {isAccepting ? "Saving..." : "Accept as chosen answer"}
-                      </Button>
-                      <AlertDialog
-                        open={acceptWarningOpen}
-                        onOpenChange={setAcceptWarningOpen}
-                      >
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Change accepted answer?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Changing the accepted answer is not recommended. Are
-                              you sure you want to do this?
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel disabled={isAccepting}>
-                              Cancel
-                            </AlertDialogCancel>
-                            <Button
-                              onClick={runSetChosenAnswer}
-                              disabled={isAccepting}
-                            >
-                              {isAccepting ? "Saving..." : "Confirm"}
-                            </Button>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </>
-                  )}
-                </ItemHeader>
-                <ItemContent className="basis-full flex-none gap-0">
-                  <div className="text-foreground [&_p]:text-[15px] [&_p]:leading-relaxed w-full">
-                    <BodyContent body={answer.body} />
-                  </div>
-                </ItemContent>
-                <ItemFooter className="basis-full border-t border-border bg-muted/30 -mx-4 -mb-4 px-4 py-3 rounded-b-lg justify-between gap-2 flex-wrap">
-                  <Byline
-                    verb="answered"
-                    username={displayAuthorName(answer.author)}
-                    timeAgo={timeAgo}
-                    agentLabel={answer.agentLabel}
-                    usernameForProfile={answer.author?.username}
-                  />
-                  <ItemActions className="gap-1 shrink-0">
-                    {canEdit && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        className="h-auto py-0.5 px-1 text-[0.6875rem] text-muted-foreground/70 hover:bg-transparent hover:text-muted-foreground"
-                        onClick={() => setIsEditing(true)}
-                      >
-                        Edit
-                      </Button>
-                    )}
-                    {isAdmin && (
-                      <>
-                        {canEdit && (
-                          <span className="text-muted-foreground/50 text-[0.6875rem]">·</span>
-                        )}
-                        <AlertDialog
-                          open={deleteDialogOpen}
-                          onOpenChange={setDeleteDialogOpen}
-                        >
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            className="h-auto py-0.5 px-1 text-[0.6875rem] text-destructive/70 hover:bg-transparent hover:text-destructive/90"
-                            onClick={() => setDeleteDialogOpen(true)}
-                          >
-                            Delete
-                          </Button>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete answer?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will permanently remove this answer and its
-                                comments. This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel disabled={isDeleting}>
-                                Cancel
-                              </AlertDialogCancel>
-                              <Button
-                                variant="destructive"
-                                onClick={handleDeleteConfirm}
-                                disabled={isDeleting}
-                              >
-                                {isDeleting ? "Deleting..." : "Delete"}
-                              </Button>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                        {error && (
-                          <span className="text-xs text-destructive">{error}</span>
-                        )}
-                      </>
-                    )}
-                  </ItemActions>
-                </ItemFooter>
-                {!isEditing && (
-                  <div className="basis-full mt-0">
-                    <CommentList
-                      comments={answer.comments}
-                      parentType="answer"
-                      parentId={answer.id}
-                      questionId={questionId}
-                      currentUserId={currentUserId}
-                      isAdmin={isAdmin}
-                      canComment={canComment}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-          </Item>
-        </div>
+    <AnswerCard.Root
+      answer={answer}
+      questionId={questionId}
+      userVote={userVote}
+      onUpdate={onUpdate}
+      onDelete={onDelete}
+      canUpvote={canUpvote}
+      canDownvote={canDownvote}
+      isSignedIn={!!currentUserId}
+      canComment={canComment}
+      acceptedAnswerId={acceptedAnswerId}
+      previousAcceptedAnswerIds={previousAcceptedAnswerIds}
+      questionAuthorId={questionAuthorId}
+      currentUserId={currentUserId}
+    >
+      <AnswerCard.Votes />
+      <div className="flex-1 min-w-0">
+        <AnswerCard.Content>
+          <AnswerCard.Body />
+          <div className="mt-4 flex items-center gap-2">
+            <AnswerCard.AcceptButton isAdmin={isAdmin} />
+            {canEdit && <AnswerCard.EditButton />}
+            {isAdmin && <AnswerCard.DeleteButton />}
+          </div>
+          <AnswerCard.Comments
+            currentUserId={currentUserId}
+            isAdmin={isAdmin}
+          />
+        </AnswerCard.Content>
       </div>
-    </div>
+    </AnswerCard.Root>
   );
 }
 
-function getTimeAgo(date: Date): string {
-  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  const years = Math.floor(months / 12);
-  return `${years}y ago`;
-}
+export { AnswerCardComposed };

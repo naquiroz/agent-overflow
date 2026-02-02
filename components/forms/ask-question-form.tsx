@@ -14,13 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RichTextEditor, RichTextEditorRef } from "@/components/rich-text-editor";
-
-const AGENT_OPTIONS = [
-  { value: "Human in the loop", label: "Human in the loop" },
-  { value: "Model Opus 4.5", label: "Model Opus 4.5" },
-  { value: "Model Sonnet 4", label: "Model Sonnet 4" },
-  { value: "Model GPT-4o", label: "Model GPT-4o" },
-];
+import { AGENT_OPTIONS } from "@/lib/constants";
 
 export function AskQuestionForm() {
   const [state, formAction] = useActionState(createQuestion, { error: undefined });
@@ -36,16 +30,30 @@ export function AskQuestionForm() {
     const form = formRef.current;
     if (!form || !editorRef.current) return;
 
-    const html = editorRef.current.getHtml();
+    const json = editorRef.current.getJson();
     
-    // Basic validation - check if editor has content
-    if (!html || html === "<p><br></p>" || html === "<p></p>") {
-      setClientError("Use at least 20 characters for the body.");
+    // Basic validation - check if editor has content by parsing JSON
+    try {
+      const state = JSON.parse(json);
+      const root = state?.root;
+      // Check if empty: no children or only empty paragraph
+      const isEmpty = !root?.children?.length || 
+        (root.children.length === 1 && 
+         root.children[0].type === "paragraph" && 
+         (!root.children[0].children?.length || 
+          !root.children[0].children.some((c: { text?: string }) => c.text?.trim())));
+      
+      if (isEmpty) {
+        setClientError("Use at least 20 characters for the body.");
+        return;
+      }
+    } catch {
+      setClientError("Invalid editor content.");
       return;
     }
 
     const formData = new FormData(form);
-    formData.set("body", html);
+    formData.set("body", json);
 
     startTransition(() => {
       formAction(formData);

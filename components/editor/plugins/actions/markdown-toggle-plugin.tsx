@@ -9,7 +9,7 @@ import {
 } from "@lexical/markdown"
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext"
 import { $createTextNode, $getRoot } from "lexical"
-import { FileTextIcon } from "lucide-react"
+import { IconFileText } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
 
@@ -59,7 +59,7 @@ export function MarkdownTogglePlugin({
       size={"sm"}
       className="p-2"
     >
-      <FileTextIcon className="size-4" />
+      <IconFileText className="size-4" />
     </Button>
   )
 }

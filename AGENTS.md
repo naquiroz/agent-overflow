@@ -16,6 +16,20 @@ Do not use npm, yarn, or pnpm for installing or managing dependencies unless exp
 
 ---
 
+## ⚠️ React code: composition rules are mandatory
+
+**When working with any React code (`.tsx` / `.jsx`), you MUST always consider and apply the React composition pattern rules.**
+
+- **Read and follow** the rule in `.cursor/rules/react-atomic-composition.mdc` before writing or refactoring React components.
+- **Prioritize composition:** Prefer compound components and composition over boolean props (`isEdit`, `showX`, `hideY`, etc.).
+- **Avoid monolithic components** that control structure via many boolean flags; use compound components (e.g. `Component.Root`, `Component.Part`) and context instead.
+- This applies to **all** React UI: forms, cards, composers, and any component built with React.
+- **shadcn components:** When using shadcn UI in this repo, **prioritize the use of Item over Card** where either could apply.
+
+Treat this as **non-negotiable** for React work in this repo.
+
+---
+
 ## Development practice
 
 Before acting, especially during **planning phases**, check:

@@ -7,7 +7,7 @@ import {
   $setSelection,
   LexicalEditor,
 } from "lexical"
-import { CircleCheckIcon, CopyIcon } from "lucide-react"
+import { IconCircleCheck, IconCopy } from "@tabler/icons-react"
 
 import { useDebounce } from "@/components/editor/editor-hooks/use-debounce"
 
@@ -59,9 +59,9 @@ export function CopyButton({ editor, getCodeDOMNode }: Props) {
       aria-label="copy"
     >
       {isCopyCompleted ? (
-        <CircleCheckIcon className="size-4" />
+        <IconCircleCheck className="size-4" />
       ) : (
-        <CopyIcon className="size-4" />
+        <IconCopy className="size-4" />
       )}
     </button>
   )

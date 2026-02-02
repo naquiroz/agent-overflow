@@ -1,6 +1,15 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
-import type { Store, Question, Answer, Comment, User, UserListItem } from "./types";
+import type {
+  Store,
+  Question,
+  Answer,
+  Comment,
+  User,
+  UserListItem,
+  PointEvent,
+  PointEventReason,
+} from "./types";
 
 const DATA_DIR = join(process.cwd(), "data");
 const STORE_PATH = join(DATA_DIR, "store.json");
@@ -18,6 +27,7 @@ function getEmptyStore(): Store {
     answers: [],
     comments: [],
     votes: [],
+    pointEvents: [],
   };
 }
 
@@ -41,6 +51,10 @@ export function readStore(): Store {
       (user as User).reputation = 1;
       needsWrite = true;
     }
+  }
+  if (!store.pointEvents || !Array.isArray(store.pointEvents)) {
+    (store as Store).pointEvents = [];
+    needsWrite = true;
   }
   if (needsWrite) {
     writeStore(store);
@@ -76,6 +90,20 @@ export function getUsersForAdmin(): UserListItem[] {
     ...(u.reputation != null && { reputation: u.reputation }),
     ...(u.deletedAt != null && { deletedAt: u.deletedAt }),
   }));
+}
+
+// Stats helper
+export function getStats(): {
+  totalQuestions: number;
+  totalAnswers: number;
+  totalUsers: number;
+} {
+  const store = readStore();
+  return {
+    totalQuestions: store.questions.length,
+    totalAnswers: store.answers.length,
+    totalUsers: store.users.filter((u) => !u.deletedAt).length,
+  };
 }
 
 // Question helpers
@@ -159,6 +187,27 @@ export function applyReputationDelta(
   user.reputation = Math.max(1, current + delta);
 }
 
+/** Apply reputation delta and record a point event for profile/history. Caller must writeStore. */
+export function applyPointsDelta(
+  store: Store,
+  userId: string,
+  delta: number,
+  reason: PointEventReason,
+  ref?: { questionId?: string; answerId?: string }
+): void {
+  applyReputationDelta(store, userId, delta);
+  const event: PointEvent = {
+    id: crypto.randomUUID(),
+    userId,
+    delta,
+    reason,
+    createdAt: new Date().toISOString(),
+    ...(ref?.questionId && { questionId: ref.questionId }),
+    ...(ref?.answerId && { answerId: ref.answerId }),
+  };
+  store.pointEvents.push(event);
+}
+
 // Vote helpers
 export function getUserVote(
   userId: string,
@@ -176,6 +225,15 @@ export function getUserVote(
 }
 
 // Profile: safe user + activity for display
+export interface UserProfilePointEvent {
+  id: string;
+  delta: number;
+  reason: PointEventReason;
+  createdAt: string;
+  questionId?: string;
+  answerId?: string;
+}
+
 export interface UserProfileData {
   profile: {
     id: string;
@@ -184,10 +242,18 @@ export interface UserProfileData {
     role: "admin" | "default";
     reputation?: number;
   };
-  questions: { id: string; title: string; createdAt: string; voteCount: number }[];
+  pointEvents: UserProfilePointEvent[];
+  questions: {
+    id: string;
+    title: string;
+    body: string;
+    createdAt: string;
+    voteCount: number;
+  }[];
   answers: {
     id: string;
     questionId: string;
+    body: string;
     createdAt: string;
     questionTitle: string;
   }[];
@@ -195,6 +261,7 @@ export interface UserProfileData {
     id: string;
     parentType: "question" | "answer";
     parentId: string;
+    body: string;
     createdAt: string;
     questionId: string;
     questionTitle: string;
@@ -208,11 +275,27 @@ export function getUserProfileByUsername(username: string): UserProfileData | nu
   );
   if (!user) return null;
 
+  const pointEvents = (store.pointEvents ?? [])
+    .filter((e) => e.userId === user.id)
+    .map((e) => ({
+      id: e.id,
+      delta: e.delta,
+      reason: e.reason,
+      createdAt: e.createdAt,
+      ...(e.questionId && { questionId: e.questionId }),
+      ...(e.answerId && { answerId: e.answerId }),
+    }))
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
   const questions = store.questions
     .filter((q) => q.authorId === user.id)
     .map((q) => ({
       id: q.id,
       title: q.title,
+      body: q.body,
       createdAt: q.createdAt,
       voteCount: q.voteCount,
     }))
@@ -228,6 +311,7 @@ export function getUserProfileByUsername(username: string): UserProfileData | nu
       return {
         id: a.id,
         questionId: a.questionId,
+        body: a.body,
         createdAt: a.createdAt,
         questionTitle: q?.title ?? "Unknown question",
       };
@@ -252,6 +336,7 @@ export function getUserProfileByUsername(username: string): UserProfileData | nu
         id: c.id,
         parentType: c.parentType,
         parentId: c.parentId,
+        body: c.body,
         createdAt: c.createdAt,
         questionId,
         questionTitle: q?.title ?? "Unknown question",
@@ -270,6 +355,7 @@ export function getUserProfileByUsername(username: string): UserProfileData | nu
       role: user.role,
       ...(user.reputation != null && { reputation: user.reputation }),
     },
+    pointEvents,
     questions,
     answers,
     comments,

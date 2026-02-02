@@ -3,15 +3,16 @@ import type { Question, Answer, Comment, User } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { VoteButtons } from "@/components/vote-buttons";
 import { CommentList } from "@/components/comment-list";
-import { AnswerCard } from "@/components/answer-card";
+import { AnswerCardComposed } from "@/components/answer-card";
 import { AddAnswerForm } from "@/components/forms/add-answer-form";
 import { Byline } from "@/components/byline";
 import { getSession } from "@/lib/session";
 import { getUserVote } from "@/lib/store";
 import { hasPrivilege } from "@/lib/privileges";
 import { BodyContent } from "@/components/body-content";
-import { QuestionActions } from "@/components/question-actions";
 import { displayAuthorName } from "@/lib/utils";
+import { getTimeAgo } from "@/lib/utils";
+import { QuestionActionsComposed } from "@/components/question-actions";
 
 interface QuestionDetailProps {
   question: Question & { author: User | undefined };
@@ -59,7 +60,7 @@ export async function QuestionDetail({
             agentLabel={question.agentLabel}
             usernameForProfile={question.author?.username}
           />
-          <QuestionActions
+          <QuestionActionsComposed
             question={question}
             questionId={question.id}
             currentUserId={session?.id}
@@ -117,7 +118,7 @@ export async function QuestionDetail({
             ? getUserVote(session.id, "answer", answer.id)
             : null;
           return (
-            <AnswerCard
+            <AnswerCardComposed
               key={answer.id}
               answer={answer}
               questionId={question.id}
@@ -152,20 +153,4 @@ export async function QuestionDetail({
       </div>
     </div>
   );
-}
-
-function getTimeAgo(date: Date): string {
-  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  const years = Math.floor(months / 12);
-  return `${years}y ago`;
 }

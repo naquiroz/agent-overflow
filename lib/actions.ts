@@ -3,10 +3,11 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createHash, randomBytes } from "crypto";
-import { readStore, writeStore, getUserByUsername, applyReputationDelta } from "./store";
+import { readStore, writeStore, getUserByUsername, applyPointsDelta } from "./store";
 import { hasPrivilege } from "./privileges";
 import { getSession, setSession, clearSession } from "./session";
 import type { User, Question, Answer, Comment, Vote } from "./types";
+import { isLexicalJson, extractTextContent, isEmptyEditorState } from "./lexical-utils";
 
 // Password hashing helpers
 function hashPassword(password: string, salt: string): string {
@@ -171,7 +172,12 @@ export async function createQuestion(
     return { error: "Use at least 10 characters for the title." };
   }
 
-  if (!body || body.length < 20) {
+  // Validate body is valid Lexical JSON and has content
+  if (!body || !isLexicalJson(body) || isEmptyEditorState(body)) {
+    return { error: "Use at least 20 characters for the body." };
+  }
+  const bodyTextLength = extractTextContent(body).length;
+  if (bodyTextLength < 20) {
     return { error: "Use at least 20 characters for the body." };
   }
 
@@ -221,7 +227,12 @@ export async function updateQuestion(
     return { error: "Use at least 10 characters for the title." };
   }
 
-  if (!body || body.length < 20) {
+  // Validate body is valid Lexical JSON and has content
+  if (!body || !isLexicalJson(body) || isEmptyEditorState(body)) {
+    return { error: "Use at least 20 characters for the body." };
+  }
+  const updateBodyTextLength = extractTextContent(body).length;
+  if (updateBodyTextLength < 20) {
     return { error: "Use at least 20 characters for the body." };
   }
 
@@ -311,7 +322,12 @@ export async function createAnswer(
   const body = formData.get("body") as string;
   const agentLabel = (formData.get("agentLabel") as string) || undefined;
 
-  if (!body || body.length < 10) {
+  // Validate body is valid Lexical JSON and has content
+  if (!body || !isLexicalJson(body) || isEmptyEditorState(body)) {
+    return { error: "Use at least 10 characters for your answer." };
+  }
+  const answerBodyTextLength = extractTextContent(body).length;
+  if (answerBodyTextLength < 10) {
     return { error: "Use at least 10 characters for your answer." };
   }
 
@@ -353,7 +369,12 @@ export async function updateAnswer(
   const body = formData.get("body") as string;
   const agentLabel = (formData.get("agentLabel") as string) || undefined;
 
-  if (!body || body.length < 10) {
+  // Validate body is valid Lexical JSON and has content
+  if (!body || !isLexicalJson(body) || isEmptyEditorState(body)) {
+    return { error: "Use at least 10 characters for your answer." };
+  }
+  const updateAnswerBodyTextLength = extractTextContent(body).length;
+  if (updateAnswerBodyTextLength < 10) {
     return { error: "Use at least 10 characters for your answer." };
   }
 
@@ -454,9 +475,21 @@ export async function setChosenAnswer(
   if (previousAcceptedId && previousAcceptedId !== answerId) {
     const previousAnswer = store.answers.find((a) => a.id === previousAcceptedId);
     if (previousAnswer) {
-      applyReputationDelta(store, previousAnswer.authorId, -15);
+      applyPointsDelta(
+        store,
+        previousAnswer.authorId,
+        -15,
+        "answer_accepted_reverted",
+        { questionId, answerId: previousAcceptedId }
+      );
       if (previousAnswer.authorId !== questionAuthorId) {
-        applyReputationDelta(store, questionAuthorId, -2);
+        applyPointsDelta(
+          store,
+          questionAuthorId,
+          -2,
+          "accept_answer_reverted",
+          { questionId, answerId: previousAcceptedId }
+        );
       }
     }
   }
@@ -474,8 +507,14 @@ export async function setChosenAnswer(
 
   // Apply reputation for new accepted answer (no rep for self-accept)
   if (!isSelfAccept) {
-    applyReputationDelta(store, answerAuthorId, 15);
-    applyReputationDelta(store, questionAuthorId, 2);
+    applyPointsDelta(store, answerAuthorId, 15, "answer_accepted", {
+      questionId,
+      answerId,
+    });
+    applyPointsDelta(store, questionAuthorId, 2, "accept_answer", {
+      questionId,
+      answerId,
+    });
   }
 
   // Upvote the accepted answer by the current user if not already voted
@@ -497,7 +536,91 @@ export async function setChosenAnswer(
     answer.voteCount += 1;
     // Reputation for the auto-upvote (no rep for self-vote)
     if (answerAuthorId !== session.id) {
-      applyReputationDelta(store, answerAuthorId, 10);
+      applyPointsDelta(store, answerAuthorId, 10, "vote_up_received", {
+        questionId,
+        answerId,
+      });
+    }
+  }
+
+  writeStore(store);
+  revalidatePath(`/questions/${questionId}`);
+  return {};
+}
+
+export async function unacceptAnswer(
+  questionId: string,
+  answerId: string
+): Promise<{ error?: string }> {
+  const session = await getSession();
+  if (!session) {
+    return { error: "You must be logged in to un-accept an answer" };
+  }
+
+  const store = readStore();
+  const question = store.questions.find((q) => q.id === questionId);
+  if (!question) {
+    return { error: "Question not found" };
+  }
+
+  const answer = store.answers.find((a) => a.id === answerId);
+  if (!answer || answer.questionId !== questionId) {
+    return { error: "Answer not found" };
+  }
+
+  if (question.authorId !== session.id && session.role !== "admin") {
+    return {
+      error: "Only the question author or an admin can un-accept an answer",
+    };
+  }
+
+  // Verify this answer is currently accepted
+  if (question.acceptedAnswerId !== answerId) {
+    return { error: "This answer is not currently accepted" };
+  }
+
+  const questionAuthorId = question.authorId;
+  const answerAuthorId = answer.authorId;
+  const isSelfAccept = questionAuthorId === answerAuthorId;
+
+  // Clear the accepted answer
+  question.acceptedAnswerId = undefined;
+
+  // Add to history of previously accepted answers
+  question.previousAcceptedAnswerIds = [
+    answerId,
+    ...(question.previousAcceptedAnswerIds ?? []),
+  ];
+
+  // Revert reputation from acceptance (no rep reversal for self-accept)
+  if (!isSelfAccept) {
+    applyPointsDelta(store, answerAuthorId, -15, "answer_accepted_reverted", {
+      questionId,
+      answerId,
+    });
+    applyPointsDelta(store, questionAuthorId, -2, "accept_answer_reverted", {
+      questionId,
+      answerId,
+    });
+  }
+
+  // Remove the auto-upvote if it exists from the user who accepted
+  const existingVoteIndex = store.votes.findIndex(
+    (v) =>
+      v.userId === session.id &&
+      v.entityType === "answer" &&
+      v.entityId === answerId &&
+      v.direction === 1
+  );
+  if (existingVoteIndex !== -1) {
+    store.votes.splice(existingVoteIndex, 1);
+    answer.voteCount -= 1;
+    // Revert reputation for the auto-upvote (no rep for self-vote)
+    if (answerAuthorId !== session.id) {
+      applyPointsDelta(store, answerAuthorId, -10, "vote_up_received", {
+        questionId,
+        answerId,
+      });
     }
   }
 
@@ -526,7 +649,12 @@ export async function createComment(
   const body = formData.get("body") as string;
   const agentLabel = (formData.get("agentLabel") as string) || undefined;
 
-  if (!body || body.length < 5) {
+  // Validate body is valid Lexical JSON and has content
+  if (!body || !isLexicalJson(body) || isEmptyEditorState(body)) {
+    return { error: "Use at least 5 characters for your comment." };
+  }
+  const commentBodyTextLength = extractTextContent(body).length;
+  if (commentBodyTextLength < 5) {
     return { error: "Use at least 5 characters for your comment." };
   }
 
@@ -562,7 +690,12 @@ export async function updateComment(
   const body = formData.get("body") as string;
   const agentLabel = (formData.get("agentLabel") as string) || undefined;
 
-  if (!body || body.length < 5) {
+  // Validate body is valid Lexical JSON and has content
+  if (!body || !isLexicalJson(body) || isEmptyEditorState(body)) {
+    return { error: "Use at least 5 characters for your comment." };
+  }
+  const updateCommentBodyTextLength = extractTextContent(body).length;
+  if (updateCommentBodyTextLength < 5) {
     return { error: "Use at least 5 characters for your comment." };
   }
 
@@ -686,18 +819,34 @@ export async function vote(
   const wasRemoved = existingDirection !== null && existingDirection === direction;
   const newDirection: 1 | -1 | null = wasRemoved ? null : direction;
 
+  const ref = {
+    questionId,
+    ...(entityType === "answer" && { answerId: entityId }),
+  };
+
   // Reputation: author deltas (no rep for self-vote)
   if (!isSelfVote && authorId) {
-    if (existingDirection === 1 && newDirection === null) applyReputationDelta(store, authorId, -10);
-    else if (existingDirection === 1 && newDirection === -1) applyReputationDelta(store, authorId, -12);
-    else if (existingDirection === -1 && newDirection === null) applyReputationDelta(store, authorId, 2);
-    else if (existingDirection === -1 && newDirection === 1) applyReputationDelta(store, authorId, 12);
-    else if (existingDirection === null && newDirection === 1) applyReputationDelta(store, authorId, 10);
-    else if (existingDirection === null && newDirection === -1) applyReputationDelta(store, authorId, -2);
+    if (existingDirection === 1 && newDirection === null)
+      applyPointsDelta(store, authorId, -10, "vote_removed", ref);
+    else if (existingDirection === 1 && newDirection === -1)
+      applyPointsDelta(store, authorId, -12, "vote_down_received", ref);
+    else if (existingDirection === -1 && newDirection === null)
+      applyPointsDelta(store, authorId, 2, "vote_removed", ref);
+    else if (existingDirection === -1 && newDirection === 1)
+      applyPointsDelta(store, authorId, 12, "vote_up_received", ref);
+    else if (existingDirection === null && newDirection === 1)
+      applyPointsDelta(store, authorId, 10, "vote_up_received", ref);
+    else if (existingDirection === null && newDirection === -1)
+      applyPointsDelta(store, authorId, -2, "vote_down_received", ref);
   }
-  // Voter delta (downvoting costs 1 rep)
-  if (existingDirection === -1 && (newDirection === null || newDirection === 1)) applyReputationDelta(store, session.id, 1);
-  else if ((existingDirection === null || existingDirection === 1) && newDirection === -1) applyReputationDelta(store, session.id, -1);
+  // Voter delta (downvoting costs 1 rep; refund when downvote removed)
+  if (existingDirection === -1 && (newDirection === null || newDirection === 1))
+    applyPointsDelta(store, session.id, 1, "vote_down_removed", ref);
+  else if (
+    (existingDirection === null || existingDirection === 1) &&
+    newDirection === -1
+  )
+    applyPointsDelta(store, session.id, -1, "vote_down_given", ref);
 
   writeStore(store);
   revalidatePath(`/questions/${questionId}`);

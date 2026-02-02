@@ -46,24 +46,24 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
-  Bold as BoldIcon,
-  Italic as ItalicIcon,
-  Underline as UnderlineIcon,
-  Strikethrough as StrikethroughIcon,
-  Code as CodeIcon,
-  List as ListBulletIcon,
-  ListOrdered as ListNumberedIcon,
-  Quote as QuoteIcon,
-  Undo as UndoIcon,
-  Redo as RedoIcon,
-  Subscript as SubscriptIcon,
-  Superscript as SuperscriptIcon,
-  PilcrowLeft as ParagraphIcon,
-  Heading1 as Heading1Icon,
-  Heading2 as Heading2Icon,
-  Heading3 as Heading3Icon,
-  SquareCode as CodeBlockIcon,
-} from "lucide-react";
+  IconBold,
+  IconItalic,
+  IconUnderline,
+  IconStrikethrough,
+  IconCode,
+  IconList,
+  IconListNumbers,
+  IconQuote,
+  IconArrowBackUp,
+  IconArrowForwardUp,
+  IconSubscript,
+  IconSuperscript,
+  IconPilcrow,
+  IconH1,
+  IconH2,
+  IconH3,
+  IconSourceCode,
+} from "@tabler/icons-react";
 
 type BlockType =
   | "paragraph"
@@ -215,7 +215,7 @@ export function EditorToolbar() {
               disabled={!toolbarState.canUndo}
               onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)}
             >
-              <UndoIcon className="h-4 w-4" />
+              <IconArrowBackUp className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Undo</TooltipContent>
@@ -230,7 +230,7 @@ export function EditorToolbar() {
               disabled={!toolbarState.canRedo}
               onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)}
             >
-              <RedoIcon className="h-4 w-4" />
+              <IconArrowForwardUp className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Redo</TooltipContent>
@@ -244,14 +244,14 @@ export function EditorToolbar() {
           onValueChange={(v) => formatBlock(editor, v as BlockType)}
         >
           <SelectTrigger className="h-8 w-[130px] gap-1">
-            {toolbarState.blockType === "paragraph" && <ParagraphIcon className="h-4 w-4" />}
-            {toolbarState.blockType === "h1" && <Heading1Icon className="h-4 w-4" />}
-            {toolbarState.blockType === "h2" && <Heading2Icon className="h-4 w-4" />}
-            {toolbarState.blockType === "h3" && <Heading3Icon className="h-4 w-4" />}
-            {toolbarState.blockType === "quote" && <QuoteIcon className="h-4 w-4" />}
-            {toolbarState.blockType === "code" && <CodeBlockIcon className="h-4 w-4" />}
-            {toolbarState.blockType === "bullet" && <ListBulletIcon className="h-4 w-4" />}
-            {toolbarState.blockType === "number" && <ListNumberedIcon className="h-4 w-4" />}
+            {toolbarState.blockType === "paragraph" && <IconPilcrow className="h-4 w-4" />}
+            {toolbarState.blockType === "h1" && <IconH1 className="h-4 w-4" />}
+            {toolbarState.blockType === "h2" && <IconH2 className="h-4 w-4" />}
+            {toolbarState.blockType === "h3" && <IconH3 className="h-4 w-4" />}
+            {toolbarState.blockType === "quote" && <IconQuote className="h-4 w-4" />}
+            {toolbarState.blockType === "code" && <IconSourceCode className="h-4 w-4" />}
+            {toolbarState.blockType === "bullet" && <IconList className="h-4 w-4" />}
+            {toolbarState.blockType === "number" && <IconListNumbers className="h-4 w-4" />}
             <SelectValue placeholder="Block" />
           </SelectTrigger>
           <SelectContent>
@@ -308,7 +308,7 @@ export function EditorToolbar() {
               className={cn("h-8 w-8", toolbarState.bold && "bg-muted")}
               onClick={() => format("bold")}
             >
-              <BoldIcon className="h-4 w-4" />
+              <IconBold className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Bold</TooltipContent>
@@ -322,7 +322,7 @@ export function EditorToolbar() {
               className={cn("h-8 w-8", toolbarState.italic && "bg-muted")}
               onClick={() => format("italic")}
             >
-              <ItalicIcon className="h-4 w-4" />
+              <IconItalic className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Italic</TooltipContent>
@@ -336,7 +336,7 @@ export function EditorToolbar() {
               className={cn("h-8 w-8", toolbarState.underline && "bg-muted")}
               onClick={() => format("underline")}
             >
-              <UnderlineIcon className="h-4 w-4" />
+              <IconUnderline className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Underline</TooltipContent>
@@ -350,7 +350,7 @@ export function EditorToolbar() {
               className={cn("h-8 w-8", toolbarState.strikethrough && "bg-muted")}
               onClick={() => format("strikethrough")}
             >
-              <StrikethroughIcon className="h-4 w-4" />
+              <IconStrikethrough className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Strikethrough</TooltipContent>
@@ -364,7 +364,7 @@ export function EditorToolbar() {
               className={cn("h-8 w-8", toolbarState.code && "bg-muted")}
               onClick={() => format("code")}
             >
-              <CodeIcon className="h-4 w-4" />
+              <IconCode className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Inline code</TooltipContent>
@@ -378,7 +378,7 @@ export function EditorToolbar() {
               className={cn("h-8 w-8", toolbarState.subscript && "bg-muted")}
               onClick={() => format("subscript")}
             >
-              <SubscriptIcon className="h-4 w-4" />
+              <IconSubscript className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Subscript</TooltipContent>
@@ -392,7 +392,7 @@ export function EditorToolbar() {
               className={cn("h-8 w-8", toolbarState.superscript && "bg-muted")}
               onClick={() => format("superscript")}
             >
-              <SuperscriptIcon className="h-4 w-4" />
+              <IconSuperscript className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Superscript</TooltipContent>
@@ -412,7 +412,7 @@ export function EditorToolbar() {
                 formatBlock(editor, toolbarState.blockType === "bullet" ? "paragraph" : "bullet")
               }
             >
-              <ListBulletIcon className="h-4 w-4" />
+              <IconList className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Bullet list</TooltipContent>
@@ -428,7 +428,7 @@ export function EditorToolbar() {
                 formatBlock(editor, toolbarState.blockType === "number" ? "paragraph" : "number")
               }
             >
-              <ListNumberedIcon className="h-4 w-4" />
+              <IconListNumbers className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Numbered list</TooltipContent>
@@ -444,7 +444,7 @@ export function EditorToolbar() {
                 formatBlock(editor, toolbarState.blockType === "quote" ? "paragraph" : "quote")
               }
             >
-              <QuoteIcon className="h-4 w-4" />
+              <IconQuote className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Quote</TooltipContent>
@@ -460,7 +460,7 @@ export function EditorToolbar() {
                 formatBlock(editor, toolbarState.blockType === "code" ? "paragraph" : "code")
               }
             >
-              <CodeBlockIcon className="h-4 w-4" />
+              <IconSourceCode className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Code block</TooltipContent>
